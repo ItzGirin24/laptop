@@ -20,9 +20,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Search, CheckCheck, XCircle, Laptop } from 'lucide-react';
+import { Search, CheckCheck, XCircle, Laptop, Download } from 'lucide-react';
 import { CLASS_LIST, ClassName } from '@/types';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 export default function 
 Page() {
@@ -82,16 +83,40 @@ Page() {
     toast.success(`Status diperbarui`);
   };
 
-  const isAllSelected = filteredStudents.length > 0 && 
+  const isAllSelected = filteredStudents.length > 0 &&
     filteredStudents.every((s) => selectedIds.includes(s.id));
+
+  const exportToExcel = () => {
+    const data = filteredStudents.map((student, index) => ({
+      'No': index + 1,
+      'Nama Siswa': student.name,
+      'No. Absen': student.studentNumber,
+      'Kelas': student.className,
+      'Loker': student.lockerNumber,
+      'Status': student.collectionStatus === 'collected' ? 'Sudah Mengumpul' : 'Belum Mengumpul',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Pengumpulan Laptop');
+    XLSX.writeFile(wb, `Pengumpulan_Laptop_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+    toast.success('Data berhasil diekspor');
+  };
 
   return (
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Pengumpulan Laptop</h1>
-          <p className="text-muted-foreground mt-1">Kelola status pengumpulan laptop siswa</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Pengumpulan Laptop</h1>
+            <p className="text-muted-foreground mt-1">Kelola status pengumpulan laptop siswa</p>
+          </div>
+          <Button onClick={exportToExcel} variant="outline" className="gap-2">
+            <Download className="h-4 w-4" />
+            Ekspor Excel
+          </Button>
         </div>
 
         {/* Filters */}
@@ -212,14 +237,11 @@ Page() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleToggleStatus(student.id, student.
-                            Status)}
-                          className={`gap-1 ${student.
-                            Status === 'collected' ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}`}
+                          onClick={() => handleToggleStatus(student.id, student.collectionStatus)}
+                          className={`gap-1 ${student.collectionStatus === 'collected' ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}`}
                         >
                           <Laptop className="h-4 w-4" />
-                          {student.
-                          Status === 'collected' ? 'Batal' : 'Kumpul'}
+                          {student.collectionStatus === 'collected' ? 'Batal' : 'Kumpul'}
                         </Button>
                       </TableCell>
                     </TableRow>

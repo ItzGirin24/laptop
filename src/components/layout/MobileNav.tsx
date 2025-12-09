@@ -19,11 +19,11 @@ import { Button } from '@/components/ui/button';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/students', icon: Users, label: 'Data Siswa', adminOnly: true },
-  { to: '/collection', icon: Laptop, label: 'Pengumpulan' },
-  { to: '/not-collected', icon: AlertTriangle, label: 'Belum Ngumpul' },
-  { to: '/confiscation', icon: Gavel, label: 'Sita Laptop' },
-  { to: '/permissions', icon: Clock, label: 'Izin Laptop' },
+  { to: '/siswa', icon: Users, label: 'Data Siswa', adminOnly: true },
+  { to: '/loker', icon: Laptop, label: 'Pengumpulan' },
+  { to: '/belum', icon: AlertTriangle, label: 'Belum Ngumpul' },
+  { to: '/sita', icon: Gavel, label: 'Sita Laptop' },
+  { to: '/izin', icon: Clock, label: 'Izin Laptop' },
   { to: '/import', icon: FileSpreadsheet, label: 'Import/Export', adminOnly: true },
 ];
 

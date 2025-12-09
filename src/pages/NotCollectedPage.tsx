@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 
 export default function NotCollectedPage() {
-  const { getNotCollectedStudents, hasActivePermission, addConfiscation, getConfiscationByStudent } = useData();
+  const { getNotCollectedStudents, hasActivePermission, addConfiscation, getConfiscationByStudent, getNotCollectedCount, getDaysSinceLastCollected } = useData();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -29,12 +29,14 @@ export default function NotCollectedPage() {
 
   const notCollectedStudents = getNotCollectedStudents();
 
-  const filteredStudents = notCollectedStudents.filter((student) => {
-    const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.lockerNumber.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesClass = classFilter === 'all' || student.className === classFilter;
-    return matchesSearch && matchesClass;
-  });
+  const filteredStudents = notCollectedStudents
+    .filter((student) => {
+      const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.lockerNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesClass = classFilter === 'all' || student.className === classFilter;
+      return matchesSearch && matchesClass;
+    })
+    .sort((a, b) => a.studentNumber - b.studentNumber); // Sort by absen number
 
   // Separate students with and without active permissions
   const studentsWithoutPermission = filteredStudents.filter(s => !hasActivePermission(s.id));
@@ -215,6 +217,8 @@ export default function NotCollectedPage() {
                     <TableHead>No. Absen</TableHead>
                     <TableHead>Kelas</TableHead>
                     <TableHead>Loker</TableHead>
+                    <TableHead>Jumlah Tidak Ngumpul</TableHead>
+                    <TableHead>Hari Sejak Terakhir Ngumpul</TableHead>
                     <TableHead>Status Sita</TableHead>
                     {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
                   </TableRow>
@@ -237,6 +241,13 @@ export default function NotCollectedPage() {
                             <Badge variant="outline">{student.className}</Badge>
                           </TableCell>
                           <TableCell>{student.lockerNumber}</TableCell>
+                          <TableCell>{getNotCollectedCount(student.id)}</TableCell>
+                          <TableCell>
+                            {(() => {
+                              const days = getDaysSinceLastCollected(student.id);
+                              return days === -1 ? 'Belum pernah' : `${days} hari`;
+                            })()}
+                          </TableCell>
                           <TableCell>
                             {confiscation ? (
                               <Badge className="bg-destructive">Disita</Badge>

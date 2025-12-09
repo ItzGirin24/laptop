@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,7 @@ import { toast } from 'sonner';
 
 export default function StudentsPage() {
   const { students, addStudent, updateStudent, deleteStudent } = useData();
+  const { isAdmin } = useAuth();
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState<string>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -118,78 +120,80 @@ export default function StudentsPage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Data Siswa</h1>
             <p className="text-muted-foreground mt-1">Kelola data siswa dan loker laptop</p>
           </div>
-          <Dialog open={isAddOpen} onOpenChange={(open) => open ? setIsAddOpen(true) : handleDialogClose()}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Tambah Siswa
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editStudent ? 'Edit Siswa' : 'Tambah Siswa Baru'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nama Siswa</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Masukkan nama siswa"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+          {isAdmin && (
+            <Dialog open={isAddOpen} onOpenChange={(open) => open ? setIsAddOpen(true) : handleDialogClose()}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Tambah Siswa
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editStudent ? 'Edit Siswa' : 'Tambah Siswa Baru'}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="studentNumber">Nomor Urut</Label>
+                    <Label htmlFor="name">Nama Siswa</Label>
                     <Input
-                      id="studentNumber"
-                      type="number"
-                      value={formData.studentNumber}
-                      onChange={(e) => setFormData({ ...formData, studentNumber: e.target.value })}
-                      placeholder="1"
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="Masukkan nama siswa"
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="className">Kelas</Label>
-                    <Select
-                      value={formData.className}
-                      onValueChange={(value) => setFormData({ ...formData, className: value as ClassName })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih kelas" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CLASS_LIST.map((cls) => (
-                          <SelectItem key={cls} value={cls}>{cls}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="studentNumber">Nomor Urut</Label>
+                      <Input
+                        id="studentNumber"
+                        type="number"
+                        value={formData.studentNumber}
+                        onChange={(e) => setFormData({ ...formData, studentNumber: e.target.value })}
+                        placeholder="1"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="className">Kelas</Label>
+                      <Select
+                        value={formData.className}
+                        onValueChange={(value) => setFormData({ ...formData, className: value as ClassName })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih kelas" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CLASS_LIST.map((cls) => (
+                            <SelectItem key={cls} value={cls}>{cls}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lockerNumber">Nomor Loker</Label>
-                  <Input
-                    id="lockerNumber"
-                    value={formData.lockerNumber}
-                    onChange={(e) => setFormData({ ...formData, lockerNumber: e.target.value })}
-                    placeholder="L1-01"
-                    required
-                  />
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <Button type="button" variant="outline" onClick={handleDialogClose} className="flex-1">
-                    Batal
-                  </Button>
-                  <Button type="submit" className="flex-1">
-                    {editStudent ? 'Simpan' : 'Tambah'}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <div className="space-y-2">
+                    <Label htmlFor="lockerNumber">Nomor Loker</Label>
+                    <Input
+                      id="lockerNumber"
+                      value={formData.lockerNumber}
+                      onChange={(e) => setFormData({ ...formData, lockerNumber: e.target.value })}
+                      placeholder="L1-01"
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <Button type="button" variant="outline" onClick={handleDialogClose} className="flex-1">
+                      Batal
+                    </Button>
+                    <Button type="submit" className="flex-1">
+                      {editStudent ? 'Simpan' : 'Tambah'}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         {/* Filters */}
@@ -258,24 +262,26 @@ export default function StudentsPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(student)}
-                          className="h-8 w-8"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(student.id)}
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {isAdmin && (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(student)}
+                            className="h-8 w-8"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(student.id)}
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

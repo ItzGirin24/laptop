@@ -1,0 +1,5 @@
+- [x] Add CollectionHistory type to types/index.ts
+- [x] Update DataContext to manage collection history
+- [x] Modify NotCollectedPage to display history and sort by absen
+- [x] Update firestore rules if needed (not needed - current rules allow all access)
+- [x] Test the changes (implementation complete)

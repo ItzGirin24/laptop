@@ -57,4 +57,12 @@ export interface ClassStats {
   percentage: number;
 }
 
+export interface CollectionHistory {
+  id: string;
+  studentId: string;
+  status: CollectionStatus;
+  date: Date;
+  createdAt: Date;
+}
+
 export const CLASS_LIST: ClassName[] = ['XA', 'XB', 'XIA', 'XIB', 'XIC', 'XIIA', 'XIIB', 'XIIC'];

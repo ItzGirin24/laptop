@@ -11,25 +11,23 @@ import {
   Shield,
   AlertTriangle,
   Gavel,
+  History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/siswa', icon: Users, label: 'Data Siswa', adminOnly: true },
+  { to: '/siswa', icon: Users, label: 'Data Siswa' },
   { to: '/loker', icon: Laptop, label: 'Pengumpulan' },
   { to: '/belum', icon: AlertTriangle, label: 'Belum Ngumpul' },
+  { to: '/riwayat', icon: History, label: 'Riwayat Pengumpulan' },
   { to: '/sita', icon: Gavel, label: 'Sita Laptop' },
   { to: '/izin', icon: Clock, label: 'Izin Laptop' },
-  { to: '/import', icon: FileSpreadsheet, label: 'Import/Export', adminOnly: true },
+  { to: '/import', icon: FileSpreadsheet, label: 'Import/Export' },
 ];
 
 export function Sidebar() {
   const { user, logout, isAdmin } = useAuth();
-
-  const filteredNavItems = navItems.filter(
-    (item) => !item.adminOnly || isAdmin
-  );
 
   return (
     <div className="flex h-full flex-col sidebar-gradient">
@@ -46,7 +44,7 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
-          {filteredNavItems.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

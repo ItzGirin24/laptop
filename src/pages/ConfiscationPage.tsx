@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Search, Gavel, RotateCcw, X, Clock, CheckCircle, Download, Bell } from 'lucide-react';
+import { Search, Gavel, RotateCcw, X, Clock, CheckCircle, Download, Bell, Trash2 } from 'lucide-react';
 import { CLASS_LIST, Confiscation } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
@@ -82,7 +82,7 @@ function ConfiscationTimer({ endDate }: { endDate: Date }) {
 }
 
 export default function ConfiscationPage() {
-  const { confiscations, returnConfiscation, cancelConfiscation } = useData();
+  const { confiscations, returnConfiscation, cancelConfiscation, deleteConfiscation } = useData();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -132,6 +132,22 @@ export default function ConfiscationPage() {
       toast({
         title: "Error",
         description: "Gagal membatalkan sita",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDelete = async (id: string, studentName: string) => {
+    try {
+      await deleteConfiscation(id);
+      toast({
+        title: "Berhasil",
+        description: `Riwayat sita ${studentName} berhasil dihapus`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal menghapus riwayat sita",
         variant: "destructive",
       });
     }
@@ -422,12 +438,13 @@ export default function ConfiscationPage() {
                         <TableHead>Loker</TableHead>
                         <TableHead>Tanggal Sita</TableHead>
                         <TableHead>Tanggal Kembali</TableHead>
+                        {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filterConfiscations(returnedConfiscations).length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                          <TableCell colSpan={isAdmin ? 6 : 5} className="h-24 text-center text-muted-foreground">
                             Belum ada laptop yang dikembalikan
                           </TableCell>
                         </TableRow>
@@ -441,6 +458,41 @@ export default function ConfiscationPage() {
                             <TableCell>{confiscation.lockerNumber}</TableCell>
                             <TableCell>{formatDate(confiscation.startDate)}</TableCell>
                             <TableCell>{confiscation.returnedAt ? formatDate(confiscation.returnedAt) : '-'}</TableCell>
+                            {isAdmin && (
+                              <TableCell className="text-right">
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      className="gap-1"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Hapus
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Hapus Riwayat Sita</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Apakah Anda yakin ingin menghapus riwayat sita laptop {confiscation.studentName}?
+                                        <br />
+                                        <strong>Tindakan ini tidak dapat dibatalkan.</strong>
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Batal</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDelete(confiscation.id, confiscation.studentName)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Hapus
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))
                       )}
@@ -469,12 +521,13 @@ export default function ConfiscationPage() {
                         <TableHead>Loker</TableHead>
                         <TableHead>Alasan Sita</TableHead>
                         <TableHead>Tanggal Sita</TableHead>
+                        {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filterConfiscations(cancelledConfiscations).length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                          <TableCell colSpan={isAdmin ? 6 : 5} className="h-24 text-center text-muted-foreground">
                             Belum ada sita yang dibatalkan
                           </TableCell>
                         </TableRow>
@@ -488,6 +541,41 @@ export default function ConfiscationPage() {
                             <TableCell>{confiscation.lockerNumber}</TableCell>
                             <TableCell className="max-w-[200px] truncate">{confiscation.reason}</TableCell>
                             <TableCell>{formatDate(confiscation.startDate)}</TableCell>
+                            {isAdmin && (
+                              <TableCell className="text-right">
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      className="gap-1 h-7 px-2 text-xs"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                      Hapus
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Hapus Riwayat Sita</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Apakah Anda yakin ingin menghapus riwayat sita laptop {confiscation.studentName}?
+                                        <br />
+                                        <strong>Tindakan ini tidak dapat dibatalkan.</strong>
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Batal</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDelete(confiscation.id, confiscation.studentName)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Hapus
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))
                       )}

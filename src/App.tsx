@@ -15,6 +15,7 @@ import PermissionsPage from "./pages/PermissionsPage";
 import ImportExportPage from "./pages/ImportExportPage";
 import NotCollectedPage from "./pages/NotCollectedPage";
 import ConfiscationPage from "./pages/ConfiscationPage";
+import HistoryPage from "./pages/HistoryPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -132,8 +133,16 @@ const App = () => (
               <Route
                 path="/import"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute>
                     <ImportExportPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/riwayat"
+                element={
+                  <ProtectedRoute>
+                    <HistoryPage />
                   </ProtectedRoute>
                 }
               />

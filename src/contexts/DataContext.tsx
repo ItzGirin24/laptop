@@ -13,12 +13,13 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Student, LaptopPermission, Confiscation, ClassName, CollectionStatus, ClassStats, CLASS_LIST } from '@/types';
+import { Student, LaptopPermission, Confiscation, ClassName, CollectionStatus, ClassStats, CollectionHistory, CLASS_LIST } from '@/types';
 
 interface DataContextType {
   students: Student[];
   permissions: LaptopPermission[];
   confiscations: Confiscation[];
+  collectionHistory: CollectionHistory[];
   isLoading: boolean;
   addStudent: (student: Omit<Student, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateStudent: (id: string, updates: Partial<Student>) => Promise<void>;
@@ -30,6 +31,7 @@ interface DataContextType {
   deletePermission: (id: string) => Promise<void>;
   addConfiscation: (confiscation: Omit<Confiscation, 'id' | 'createdAt' | 'status'>) => Promise<void>;
   updateConfiscation: (id: string, updates: Partial<Confiscation>) => Promise<void>;
+  deleteConfiscation: (id: string) => Promise<void>;
   returnConfiscation: (id: string) => Promise<void>;
   cancelConfiscation: (id: string) => Promise<void>;
   getClassStats: () => ClassStats[];
@@ -38,6 +40,11 @@ interface DataContextType {
   hasActivePermission: (studentId: string) => boolean;
   getActiveConfiscations: () => Confiscation[];
   getConfiscationByStudent: (studentId: string) => Confiscation | undefined;
+  addCollectionHistory: (history: Omit<CollectionHistory, 'id' | 'createdAt'>) => Promise<void>;
+  deleteCollectionHistory: (id: string) => Promise<void>;
+  getCollectionHistoryByStudent: (studentId: string) => CollectionHistory[];
+  getNotCollectedCount: (studentId: string) => number;
+  getDaysSinceLastCollected: (studentId: string) => number;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -56,6 +63,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [students, setStudents] = useState<Student[]>([]);
   const [permissions, setPermissions] = useState<LaptopPermission[]>([]);
   const [confiscations, setConfiscations] = useState<Confiscation[]>([]);
+  const [collectionHistory, setCollectionHistory] = useState<CollectionHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -94,12 +102,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setConfiscations(confiscationsData);
     });
 
+    // Subscribe to collectionHistory collection
+    const unsubCollectionHistory = onSnapshot(collection(db, 'collectionHistory'), (snapshot) => {
+      const collectionHistoryData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        date: timestampToDate(doc.data().date),
+        createdAt: timestampToDate(doc.data().createdAt),
+      })) as CollectionHistory[];
+      setCollectionHistory(collectionHistoryData);
+    });
+
     setIsLoading(false);
 
     return () => {
       unsubStudents();
       unsubPermissions();
       unsubConfiscations();
+      unsubCollectionHistory();
     };
   }, []);
 
@@ -123,8 +143,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await deleteDoc(doc(db, 'students', id));
   };
 
+  const addCollectionHistory = async (history: Omit<CollectionHistory, 'id' | 'createdAt'>) => {
+    await addDoc(collection(db, 'collectionHistory'), {
+      ...history,
+      date: Timestamp.fromDate(history.date instanceof Date ? history.date : new Date(history.date)),
+      createdAt: Timestamp.now(),
+    });
+  };
+
+  const deleteCollectionHistory = async (id: string) => {
+    await deleteDoc(doc(db, 'collectionHistory', id));
+  };
+
   const updateCollectionStatus = async (id: string, status: CollectionStatus) => {
     await updateStudent(id, { collectionStatus: status });
+    // Add to collection history
+    await addCollectionHistory({
+      studentId: id,
+      status,
+      date: new Date(),
+    });
   };
 
   const bulkUpdateStatus = async (ids: string[], status: CollectionStatus) => {
@@ -187,9 +225,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const cancelConfiscation = async (id: string) => {
-    await updateConfiscation(id, { 
-      status: 'cancelled' 
+    await updateConfiscation(id, {
+      status: 'cancelled'
     });
+  };
+
+  const deleteConfiscation = async (id: string) => {
+    await deleteDoc(doc(db, 'confiscations', id));
   };
 
   const getClassStats = (): ClassStats[] => {
@@ -241,12 +283,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return confiscations.find((c) => c.studentId === studentId && c.status === 'active');
   };
 
+  const getCollectionHistoryByStudent = (studentId: string) => {
+    return collectionHistory
+      .filter((h) => h.studentId === studentId)
+      .sort((a, b) => b.date.getTime() - a.date.getTime()); // Most recent first
+  };
+
+  const getNotCollectedCount = (studentId: string) => {
+    return collectionHistory.filter((h) => h.studentId === studentId && h.status === 'not_collected').length;
+  };
+
+  const getDaysSinceLastCollected = (studentId: string) => {
+    const collectedHistory = collectionHistory
+      .filter((h) => h.studentId === studentId && h.status === 'collected')
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    if (collectedHistory.length === 0) return -1; // Never collected
+
+    const lastCollected = collectedHistory[0].date;
+    const now = new Date();
+    const diffTime = now.getTime() - lastCollected.getTime();
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  };
+
   return (
     <DataContext.Provider
       value={{
         students,
         permissions,
         confiscations,
+        collectionHistory,
         isLoading,
         addStudent,
         updateStudent,
@@ -258,6 +324,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         deletePermission,
         addConfiscation,
         updateConfiscation,
+        deleteConfiscation,
         returnConfiscation,
         cancelConfiscation,
         getClassStats,
@@ -266,6 +333,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         hasActivePermission,
         getActiveConfiscations,
         getConfiscationByStudent,
+        addCollectionHistory,
+        deleteCollectionHistory,
+        getCollectionHistoryByStudent,
+        getNotCollectedCount,
+        getDaysSinceLastCollected,
       }}
     >
       {children}

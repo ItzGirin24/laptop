@@ -53,7 +53,7 @@ export default function StudentsPage() {
       student.lockerNumber.toLowerCase().includes(search.toLowerCase());
     const matchesClass = filterClass === 'all' || student.className === filterClass;
     return matchesSearch && matchesClass;
-  });
+  }).sort((a, b) => a.studentNumber - b.studentNumber);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

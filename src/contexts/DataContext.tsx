@@ -13,7 +13,12 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import axios from 'axios';
 import { Student, LaptopPermission, Confiscation, ClassName, CollectionStatus, ClassStats, CollectionHistory, CLASS_LIST } from '@/types';
+
+// Configuration constants
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const USE_MARIADB = import.meta.env.VITE_USE_MARIADB === 'true';
 
 interface DataContextType {
   students: Student[];
@@ -59,6 +64,25 @@ const timestampToDate = (timestamp: any): Date => {
   return new Date(timestamp);
 };
 
+// API helper functions for MariaDB
+const apiCall = async (method: 'GET' | 'POST' | 'PUT' | 'DELETE', endpoint: string, data?: any) => {
+  try {
+    const config = {
+      method,
+      url: `${API_BASE_URL}${endpoint}`,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      ...(data && { data }),
+    };
+    const response = await axios(config);
+    return response.data;
+  } catch (error) {
+    console.error(`API call failed: ${method} ${endpoint}`, error);
+    throw error;
+  }
+};
+
 export function DataProvider({ children }: { children: ReactNode }) {
   const [students, setStudents] = useState<Student[]>([]);
   const [permissions, setPermissions] = useState<LaptopPermission[]>([]);
@@ -67,68 +91,99 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Subscribe to students collection
-    const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
-      const studentsData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: timestampToDate(doc.data().createdAt),
-        updatedAt: timestampToDate(doc.data().updatedAt),
-      })) as Student[];
-      setStudents(studentsData);
-    });
+    const loadData = async () => {
+      try {
+        if (USE_MARIADB) {
+          // Load data from MariaDB API
+          const [studentsRes, permissionsRes, confiscationsRes, historyRes] = await Promise.all([
+            apiCall('GET', '/students'),
+            apiCall('GET', '/permissions'),
+            apiCall('GET', '/confiscations'),
+            apiCall('GET', '/collection-history')
+          ]);
 
-    // Subscribe to permissions collection
-    const unsubPermissions = onSnapshot(collection(db, 'permissions'), (snapshot) => {
-      const permissionsData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        date: timestampToDate(doc.data().date),
-        createdAt: timestampToDate(doc.data().createdAt),
-      })) as LaptopPermission[];
-      setPermissions(permissionsData);
-    });
+          setStudents(studentsRes);
+          setPermissions(permissionsRes);
+          setConfiscations(confiscationsRes);
+          setCollectionHistory(historyRes);
+        } else {
+          // Subscribe to Firestore collections
+          const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
+            const studentsData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+              createdAt: timestampToDate(doc.data().createdAt),
+              updatedAt: timestampToDate(doc.data().updatedAt),
+            })) as Student[];
+            setStudents(studentsData);
+          });
 
-    // Subscribe to confiscations collection
-    const unsubConfiscations = onSnapshot(collection(db, 'confiscations'), (snapshot) => {
-      const confiscationsData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        startDate: timestampToDate(doc.data().startDate),
-        endDate: timestampToDate(doc.data().endDate),
-        createdAt: timestampToDate(doc.data().createdAt),
-        returnedAt: doc.data().returnedAt ? timestampToDate(doc.data().returnedAt) : undefined,
-      })) as Confiscation[];
-      setConfiscations(confiscationsData);
-    });
+          const unsubPermissions = onSnapshot(collection(db, 'permissions'), (snapshot) => {
+            const permissionsData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+              date: timestampToDate(doc.data().date),
+              createdAt: timestampToDate(doc.data().createdAt),
+            })) as LaptopPermission[];
+            setPermissions(permissionsData);
+          });
 
-    // Subscribe to collectionHistory collection
-    const unsubCollectionHistory = onSnapshot(collection(db, 'collectionHistory'), (snapshot) => {
-      const collectionHistoryData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        date: timestampToDate(doc.data().date),
-        createdAt: timestampToDate(doc.data().createdAt),
-      })) as CollectionHistory[];
-      setCollectionHistory(collectionHistoryData);
-    });
+          const unsubConfiscations = onSnapshot(collection(db, 'confiscations'), (snapshot) => {
+            const confiscationsData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+              startDate: timestampToDate(doc.data().startDate),
+              endDate: timestampToDate(doc.data().endDate),
+              createdAt: timestampToDate(doc.data().createdAt),
+              returnedAt: doc.data().returnedAt ? timestampToDate(doc.data().returnedAt) : undefined,
+            })) as Confiscation[];
+            setConfiscations(confiscationsData);
+          });
 
-    setIsLoading(false);
+          const unsubCollectionHistory = onSnapshot(collection(db, 'collectionHistory'), (snapshot) => {
+            const collectionHistoryData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+              date: timestampToDate(doc.data().date),
+              createdAt: timestampToDate(doc.data().createdAt),
+            })) as CollectionHistory[];
+            setCollectionHistory(collectionHistoryData);
+          });
 
-    return () => {
-      unsubStudents();
-      unsubPermissions();
-      unsubConfiscations();
-      unsubCollectionHistory();
+          return () => {
+            unsubStudents();
+            unsubPermissions();
+            unsubConfiscations();
+            unsubCollectionHistory();
+          };
+        }
+      } catch (error) {
+        console.error('Error loading data:', error);
+        // Fallback to Firestore if MariaDB fails
+        if (USE_MARIADB) {
+          console.warn('Falling back to Firestore due to MariaDB error');
+          // Could implement fallback logic here
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
+
+    loadData();
   }, []);
 
   const addStudent = async (student: Omit<Student, 'id' | 'createdAt' | 'updatedAt'>) => {
-    await addDoc(collection(db, 'students'), {
-      ...student,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
+    if (USE_MARIADB) {
+      const result = await apiCall('POST', '/students', student);
+      // Update local state
+      setStudents(prev => [...prev, result]);
+    } else {
+      await addDoc(collection(db, 'students'), {
+        ...student,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+    }
   };
 
   const updateStudent = async (id: string, updates: Partial<Student>) => {
@@ -144,15 +199,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const addCollectionHistory = async (history: Omit<CollectionHistory, 'id' | 'createdAt'>) => {
-    await addDoc(collection(db, 'collectionHistory'), {
-      ...history,
-      date: Timestamp.fromDate(history.date instanceof Date ? history.date : new Date(history.date)),
-      createdAt: Timestamp.now(),
-    });
+    if (USE_MARIADB) {
+      const result = await apiCall('POST', '/collection-history', history);
+      // Update local state
+      setCollectionHistory(prev => [...prev, result]);
+    } else {
+      await addDoc(collection(db, 'collectionHistory'), {
+        ...history,
+        date: Timestamp.fromDate(history.date instanceof Date ? history.date : new Date(history.date)),
+        createdAt: Timestamp.now(),
+      });
+    }
   };
 
   const deleteCollectionHistory = async (id: string) => {
-    await deleteDoc(doc(db, 'collectionHistory', id));
+    if (USE_MARIADB) {
+      await apiCall('DELETE', `/collection-history/${id}`);
+      // Update local state
+      setCollectionHistory(prev => prev.filter(item => item.id !== id));
+    } else {
+      await deleteDoc(doc(db, 'collectionHistory', id));
+    }
   };
 
   const updateCollectionStatus = async (id: string, status: CollectionStatus) => {
@@ -166,28 +233,43 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const bulkUpdateStatus = async (ids: string[], status: CollectionStatus) => {
-    const batch = writeBatch(db);
-    ids.forEach((id) => {
-      const studentRef = doc(db, 'students', id);
-      batch.update(studentRef, { 
-        collectionStatus: status, 
-        updatedAt: Timestamp.now() 
+    if (USE_MARIADB) {
+      await apiCall('POST', '/students/bulk-update-status', { ids, status });
+      // Update local state
+      setStudents(prev => prev.map(student =>
+        ids.includes(student.id) ? { ...student, collectionStatus: status } : student
+      ));
+    } else {
+      const batch = writeBatch(db);
+      ids.forEach((id) => {
+        const studentRef = doc(db, 'students', id);
+        batch.update(studentRef, {
+          collectionStatus: status,
+          updatedAt: Timestamp.now()
+        });
       });
-    });
-    await batch.commit();
+      await batch.commit();
+    }
   };
 
   const importStudents = async (newStudents: Omit<Student, 'id' | 'createdAt' | 'updatedAt'>[]) => {
-    const batch = writeBatch(db);
-    newStudents.forEach((student) => {
-      const docRef = doc(collection(db, 'students'));
-      batch.set(docRef, {
-        ...student,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+    if (USE_MARIADB) {
+      await apiCall('POST', '/students/bulk-import', newStudents);
+      // Refresh data from API
+      const studentsRes = await apiCall('GET', '/students');
+      setStudents(studentsRes);
+    } else {
+      const batch = writeBatch(db);
+      newStudents.forEach((student) => {
+        const docRef = doc(collection(db, 'students'));
+        batch.set(docRef, {
+          ...student,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
       });
-    });
-    await batch.commit();
+      await batch.commit();
+    }
   };
 
   const addPermission = async (permission: Omit<LaptopPermission, 'id' | 'createdAt'>) => {

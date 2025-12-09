@@ -8,8 +8,8 @@ export function NotCollectedList() {
   const notCollected = getNotCollectedStudents();
 
   // Separate into those with permission and those without
-  const withPermission = notCollected.filter((s) => hasActivePermission(s.id));
-  const forConfiscation = notCollected.filter((s) => !hasActivePermission(s.id));
+  const withPermission = notCollected.filter((s) => hasActivePermission(s.id)).sort((a, b) => a.studentNumber - b.studentNumber);
+  const forConfiscation = notCollected.filter((s) => !hasActivePermission(s.id)).sort((a, b) => a.studentNumber - b.studentNumber);
 
   return (
     <div className="stat-card border border-border fade-in">

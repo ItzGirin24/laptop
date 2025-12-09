@@ -24,7 +24,8 @@ import { Search, CheckCheck, XCircle, Laptop } from 'lucide-react';
 import { CLASS_LIST, ClassName } from '@/types';
 import { toast } from 'sonner';
 
-export default function CollectionPage() {
+export default function 
+Page() {
   const { students, updateCollectionStatus, bulkUpdateStatus, hasActivePermission } = useData();
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState<string>('all');
@@ -37,7 +38,7 @@ export default function CollectionPage() {
     const matchesClass = filterClass === 'all' || student.className === filterClass;
     const matchesStatus = filterStatus === 'all' || student.collectionStatus === filterStatus;
     return matchesSearch && matchesClass && matchesStatus;
-  });
+  }).sort((a, b) => a.studentNumber - b.studentNumber);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -199,10 +200,10 @@ export default function CollectionPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className={`status-badge ${student.collectionStatus === 'collected' ? 'status-collected' : hasPermission ? 'status-permitted' : 'status-not-collected'}`}>
-                            {student.collectionStatus === 'collected' 
-                              ? 'Sudah' 
-                              : hasPermission 
-                              ? 'Berizin' 
+                            {student.collectionStatus === 'collected'
+                              ? 'Sudah'
+                              : hasPermission
+                              ? 'Berizin'
                               : 'Belum'}
                           </span>
                         </div>
@@ -211,11 +212,14 @@ export default function CollectionPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleToggleStatus(student.id, student.collectionStatus)}
-                          className={`gap-1 ${student.collectionStatus === 'collected' ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}`}
+                          onClick={() => handleToggleStatus(student.id, student.
+                            Status)}
+                          className={`gap-1 ${student.
+                            Status === 'collected' ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}`}
                         >
                           <Laptop className="h-4 w-4" />
-                          {student.collectionStatus === 'collected' ? 'Batal' : 'Kumpul'}
+                          {student.
+                          Status === 'collected' ? 'Batal' : 'Kumpul'}
                         </Button>
                       </TableCell>
                     </TableRow>

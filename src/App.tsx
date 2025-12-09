@@ -90,7 +90,7 @@ const App = () => (
                 }
               />
               <Route
-                path="/students"
+                path="/siswa"
                 element={
                   <ProtectedRoute>
                     <StudentsPage />
@@ -98,7 +98,7 @@ const App = () => (
                 }
               />
               <Route
-                path="/collection"
+                path="/loker"
                 element={
                   <ProtectedRoute>
                     <CollectionPage />
@@ -106,7 +106,7 @@ const App = () => (
                 }
               />
               <Route
-                path="/not-collected"
+                path="/belum"
                 element={
                   <ProtectedRoute>
                     <NotCollectedPage />
@@ -114,7 +114,7 @@ const App = () => (
                 }
               />
               <Route
-                path="/confiscation"
+                path="/sita"
                 element={
                   <ProtectedRoute>
                     <ConfiscationPage />
@@ -122,7 +122,7 @@ const App = () => (
                 }
               />
               <Route
-                path="/permissions"
+                path="/izin"
                 element={
                   <ProtectedRoute>
                     <PermissionsPage />

@@ -7,20 +7,30 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Calendar, History, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
+import { Calendar, History, CheckCircle2, XCircle, Trash2, AlertTriangle, Clock, Download, Search } from 'lucide-react';
 import { CollectionHistory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 
 export default function HistoryPage() {
-  const { collectionHistory, students, deleteCollectionHistory } = useData();
+  const { collectionHistory, students, deleteCollectionHistory, hasActivePermission, getConfiscationByStudent, getNotCollectedCount, getDaysSinceLastCollected } = useData();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [monthFilter, setMonthFilter] = useState<string>('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [historyToDelete, setHistoryToDelete] = useState<CollectionHistory | null>(null);
+  const [searchDate, setSearchDate] = useState<string>('');
+  const [exportMonthFilter, setExportMonthFilter] = useState<string>('all');
+
+  // Reset searchDate when exportMonthFilter changes
+  const handleExportMonthChange = (value: string) => {
+    setExportMonthFilter(value);
+    setSearchDate(''); // Reset selected date when month changes
+  };
 
   // Get unique dates from collection history
   const uniqueDates = Array.from(
@@ -47,7 +57,7 @@ export default function HistoryPage() {
     return {
       collected: collected.length,
       notCollected: notCollected.length,
-      total: dateHistory.length,
+      total: students.length, // Use total registered students instead of history entries
       details: dateHistory
     };
   };
@@ -76,6 +86,203 @@ export default function HistoryPage() {
         variant: "destructive",
       });
     }
+  };
+
+  const handleExportDate = () => {
+    if (!searchDate) {
+      toast({
+        title: "Error",
+        description: "Pilih tanggal terlebih dahulu",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const dateData = getDateData(searchDate);
+    if (dateData.details.length === 0) {
+      toast({
+        title: "Error",
+        description: "Tidak ada data untuk tanggal tersebut",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prepare export data
+    const exportData = [
+      // Summary row
+      {
+        'Tanggal': new Date(searchDate).toLocaleDateString('id-ID'),
+        'Total Siswa': dateData.total.toString(),
+        'Sudah Mengumpul': dateData.collected.toString(),
+        'Belum Mengumpul': dateData.notCollected.toString(),
+        'Tingkat Kepatuhan': dateData.total > 0 ? `${Math.round((dateData.collected / dateData.total) * 100)}%` : '0%',
+        'Nama Siswa': '',
+        'No. Absen': '',
+        'Kelas': '',
+        'Loker': '',
+        'Status': '',
+        'Jumlah Tidak Ngumpul': '',
+        'Hari Sejak Terakhir Ngumpul': '',
+        'Status Izin': '',
+        'Status Sita': ''
+      },
+      // Empty row for separation
+      {
+        'Tanggal': '',
+        'Total Siswa': '',
+        'Sudah Mengumpul': '',
+        'Belum Mengumpul': '',
+        'Tingkat Kepatuhan': '',
+        'Nama Siswa': '',
+        'No. Absen': '',
+        'Kelas': '',
+        'Loker': '',
+        'Status': '',
+        'Jumlah Tidak Ngumpul': '',
+        'Hari Sejak Terakhir Ngumpul': '',
+        'Status Izin': '',
+        'Status Sita': ''
+      },
+      // Header for collected students
+      {
+        'Tanggal': 'SISWA YANG SUDAH MENGUMPULKAN',
+        'Total Siswa': '',
+        'Sudah Mengumpul': '',
+        'Belum Mengumpul': '',
+        'Tingkat Kepatuhan': '',
+        'Nama Siswa': '',
+        'No. Absen': '',
+        'Kelas': '',
+        'Loker': '',
+        'Status': '',
+        'Jumlah Tidak Ngumpul': '',
+        'Hari Sejak Terakhir Ngumpul': '',
+        'Status Izin': '',
+        'Status Sita': ''
+      }
+    ];
+
+    // Add collected students
+    dateData.details
+      .filter(h => h.status === 'collected')
+      .forEach((history) => {
+        const student = students.find(s => s.id === history.studentId);
+        if (student) {
+          exportData.push({
+            'Tanggal': '',
+            'Total Siswa': '',
+            'Sudah Mengumpul': '',
+            'Belum Mengumpul': '',
+            'Tingkat Kepatuhan': '',
+            'Nama Siswa': student.name,
+            'No. Absen': student.studentNumber,
+            'Kelas': student.className,
+            'Loker': student.lockerNumber,
+            'Status': 'Sudah Mengumpul',
+            'Jumlah Tidak Ngumpul': getNotCollectedCount(student.id).toString(),
+            'Hari Sejak Terakhir Ngumpul': (() => {
+              const days = getDaysSinceLastCollected(student.id);
+              return days === -1 ? 'Belum pernah' : `${days} hari`;
+            })(),
+            'Status Izin': hasActivePermission(student.id) ? 'Sedang Izin' : 'Tidak Ada Izin',
+            'Status Sita': getConfiscationByStudent(student.id) ? 'Disita' : 'Belum Disita'
+          });
+        }
+      });
+
+    // Add separator
+    exportData.push({
+      'Tanggal': '',
+      'Total Siswa': '',
+      'Sudah Mengumpul': '',
+      'Belum Mengumpul': '',
+      'Tingkat Kepatuhan': '',
+      'Nama Siswa': '',
+      'No. Absen': '',
+      'Kelas': '',
+      'Loker': '',
+      'Status': '',
+      'Jumlah Tidak Ngumpul': '',
+      'Hari Sejak Terakhir Ngumpul': '',
+      'Status Izin': '',
+      'Status Sita': ''
+    });
+
+    // Header for not collected students
+    exportData.push({
+      'Tanggal': 'SISWA YANG BELUM MENGUMPULKAN',
+      'Total Siswa': '',
+      'Sudah Mengumpul': '',
+      'Belum Mengumpul': '',
+      'Tingkat Kepatuhan': '',
+      'Nama Siswa': '',
+      'No. Absen': '',
+      'Kelas': '',
+      'Loker': '',
+      'Status': '',
+      'Jumlah Tidak Ngumpul': '',
+      'Hari Sejak Terakhir Ngumpul': '',
+      'Status Izin': '',
+      'Status Sita': ''
+    });
+
+    // Add not collected students
+    dateData.details
+      .filter(h => h.status === 'not_collected')
+      .forEach((history) => {
+        const student = students.find(s => s.id === history.studentId);
+        if (student) {
+          exportData.push({
+            'Tanggal': '',
+            'Total Siswa': '',
+            'Sudah Mengumpul': '',
+            'Belum Mengumpul': '',
+            'Tingkat Kepatuhan': '',
+            'Nama Siswa': student.name,
+            'No. Absen': student.studentNumber,
+            'Kelas': student.className,
+            'Loker': student.lockerNumber,
+            'Status': 'Belum Mengumpul',
+            'Jumlah Tidak Ngumpul': getNotCollectedCount(student.id).toString(),
+            'Hari Sejak Terakhir Ngumpul': (() => {
+              const days = getDaysSinceLastCollected(student.id);
+              return days === -1 ? 'Belum pernah' : `${days} hari`;
+            })(),
+            'Status Izin': hasActivePermission(student.id) ? 'Sedang Izin' : 'Tidak Ada Izin',
+            'Status Sita': getConfiscationByStudent(student.id) ? 'Disita' : 'Belum Disita'
+          });
+        }
+      });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Riwayat Pengumpulan');
+
+    // Auto-fit columns
+    const colWidths = [
+      { wch: 15 }, // Tanggal
+      { wch: 12 }, // Total Siswa
+      { wch: 15 }, // Sudah Mengumpul
+      { wch: 15 }, // Belum Mengumpul
+      { wch: 18 }, // Tingkat Kepatuhan
+      { wch: 30 }, // Nama Siswa
+      { wch: 10 }, // No. Absen
+      { wch: 10 }, // Kelas
+      { wch: 15 }, // Loker
+      { wch: 15 }, // Status
+      { wch: 20 }, // Jumlah Tidak Ngumpul
+      { wch: 25 }, // Hari Sejak Terakhir Ngumpul
+      { wch: 15 }, // Status Izin
+      { wch: 15 }, // Status Sita
+    ];
+    worksheet['!cols'] = colWidths;
+
+    XLSX.writeFile(workbook, `Riwayat_Pengumpulan_${searchDate}.xlsx`);
+    toast({
+      title: "Berhasil",
+      description: "Data riwayat berhasil diexport",
+    });
   };
 
   return (
@@ -114,6 +321,82 @@ export default function HistoryPage() {
                   })}
                 </SelectContent>
               </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Export Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" />
+              Export Data
+            </CardTitle>
+            <CardDescription>
+              Export riwayat pengumpulan berdasarkan tanggal yang sudah ada datanya
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-4">
+                <div>
+                  <label htmlFor="export-month" className="text-sm font-medium">
+                    Pilih Bulan
+                  </label>
+                  <Select value={exportMonthFilter} onValueChange={handleExportMonthChange}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Pilih bulan terlebih dahulu" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Semua Bulan</SelectItem>
+                      {availableMonths.map((month) => {
+                        const [year, monthNum] = month.split('-');
+                        const monthNames = [
+                          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+                        ];
+                        return (
+                          <SelectItem key={month} value={month}>
+                            {monthNames[parseInt(monthNum) - 1]} {year}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label htmlFor="export-date" className="text-sm font-medium">
+                    Pilih Tanggal
+                  </label>
+                  <Select value={searchDate} onValueChange={setSearchDate} disabled={exportMonthFilter === 'all'}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder={exportMonthFilter === 'all' ? "Pilih bulan terlebih dahulu" : "Pilih tanggal yang memiliki data"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uniqueDates
+                        .filter(date => exportMonthFilter === 'all' || date.startsWith(exportMonthFilter))
+                        .map((date) => {
+                          const dateObj = new Date(date);
+                          const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          });
+                          return (
+                            <SelectItem key={date} value={date}>
+                              {formattedDate}
+                            </SelectItem>
+                          );
+                        })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button onClick={handleExportDate} className="gap-2" disabled={!searchDate}>
+                <Download className="h-4 w-4" />
+                Export Excel
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -166,17 +449,17 @@ export default function HistoryPage() {
                       return (
                         <TableRow key={date}>
                           <TableCell className="font-medium">{formattedDate}</TableCell>
-                          <TableCell>{data.total}</TableCell>
+                          <TableCell>{data.total.toString()}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <CheckCircle2 className="h-4 w-4 text-success" />
-                              {data.collected}
+                              {data.collected.toString()}
                             </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <XCircle className="h-4 w-4 text-destructive" />
-                              {data.notCollected}
+                              {data.notCollected.toString()}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -232,7 +515,7 @@ export default function HistoryPage() {
                           <History className="h-6 w-6 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold">{selectedDateData.total}</p>
+                          <p className="text-2xl font-bold">{selectedDateData.total.toString()}</p>
                           <p className="text-sm text-muted-foreground">Total Siswa</p>
                         </div>
                       </div>
@@ -245,7 +528,7 @@ export default function HistoryPage() {
                           <CheckCircle2 className="h-6 w-6 text-success" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-success">{selectedDateData.collected}</p>
+                          <p className="text-2xl font-bold text-success">{selectedDateData.collected.toString()}</p>
                           <p className="text-sm text-muted-foreground">Sudah Ngumpul</p>
                         </div>
                       </div>
@@ -258,7 +541,7 @@ export default function HistoryPage() {
                           <XCircle className="h-6 w-6 text-destructive" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-destructive">{selectedDateData.notCollected}</p>
+                          <p className="text-2xl font-bold text-destructive">{selectedDateData.notCollected.toString()}</p>
                           <p className="text-sm text-muted-foreground">Belum Ngumpul</p>
                         </div>
                       </div>
@@ -271,7 +554,7 @@ export default function HistoryPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-success">
                       <CheckCircle2 className="h-5 w-5" />
-                      Sudah Mengumpulkan ({selectedDateData.collected})
+                      Sudah Mengumpulkan ({selectedDateData.collected.toString()})
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -347,9 +630,12 @@ export default function HistoryPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-destructive">
-                      <XCircle className="h-5 w-5" />
-                      Belum Mengumpulkan ({selectedDateData.notCollected})
+                      <AlertTriangle className="h-5 w-5" />
+                      Belum Mengumpulkan ({selectedDateData.notCollected.toString()})
                     </CardTitle>
+                    <CardDescription>
+                      Siswa yang belum mengumpulkan laptop pada tanggal ini
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="rounded-lg border">
@@ -360,6 +646,10 @@ export default function HistoryPage() {
                             <TableHead>No. Absen</TableHead>
                             <TableHead>Kelas</TableHead>
                             <TableHead>Loker</TableHead>
+                            <TableHead>Jumlah Tidak Ngumpul</TableHead>
+                            <TableHead>Hari Sejak Terakhir Ngumpul</TableHead>
+                            <TableHead>Status Izin</TableHead>
+                            <TableHead>Status Sita</TableHead>
                             {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
                           </TableRow>
                         </TableHeader>
@@ -368,7 +658,12 @@ export default function HistoryPage() {
                             .filter(h => h.status === 'not_collected')
                             .map((history) => {
                               const student = students.find(s => s.id === history.studentId);
-                              return student ? (
+                              if (!student) return null;
+
+                              const confiscation = getConfiscationByStudent(student.id);
+                              const hasPermission = hasActivePermission(student.id);
+
+                              return (
                                 <TableRow key={history.id}>
                                   <TableCell className="font-medium">{student.name}</TableCell>
                                   <TableCell>{student.studentNumber}</TableCell>
@@ -376,6 +671,30 @@ export default function HistoryPage() {
                                     <Badge variant="outline">{student.className}</Badge>
                                   </TableCell>
                                   <TableCell>{student.lockerNumber}</TableCell>
+                                  <TableCell>{getNotCollectedCount(student.id).toString()}</TableCell>
+                                  <TableCell>
+                                    {(() => {
+                                      const days = getDaysSinceLastCollected(student.id);
+                                      return days === -1 ? 'Belum pernah' : `${days} hari`;
+                                    })()}
+                                  </TableCell>
+                                  <TableCell>
+                                    {hasPermission ? (
+                                      <Badge className="bg-warning text-warning-foreground">
+                                        <Clock className="h-3 w-3 mr-1" />
+                                        Sedang Izin
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="secondary">Tidak Ada Izin</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    {confiscation ? (
+                                      <Badge className="bg-destructive">Disita</Badge>
+                                    ) : (
+                                      <Badge variant="secondary">Belum Disita</Badge>
+                                    )}
+                                  </TableCell>
                                   {isAdmin && (
                                     <TableCell className="text-right">
                                       <AlertDialog>
@@ -412,7 +731,7 @@ export default function HistoryPage() {
                                     </TableCell>
                                   )}
                                 </TableRow>
-                              ) : null;
+                              );
                             })}
                         </TableBody>
                       </Table>

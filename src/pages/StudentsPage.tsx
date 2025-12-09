@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Users } from 'lucide-react';
 import { CLASS_LIST, ClassName, Student } from '@/types';
 import { toast } from 'sonner';
 
@@ -38,6 +38,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState<string>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [editStudent, setEditStudent] = useState<Student | null>(null);
 
   // Form state
@@ -46,6 +47,12 @@ export default function StudentsPage() {
     studentNumber: '',
     className: '' as ClassName | '',
     lockerNumber: '',
+  });
+
+  // Bulk edit state
+  const [bulkEditData, setBulkEditData] = useState({
+    className: '' as ClassName | '',
+    lockerPrefix: '',
   });
 
   const filteredStudents = students.filter((student) => {
@@ -111,6 +118,33 @@ export default function StudentsPage() {
     setFormData({ name: '', studentNumber: '', className: '', lockerNumber: '' });
   };
 
+  const handleBulkEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!bulkEditData.className) {
+      toast.error('Pilih kelas terlebih dahulu');
+      return;
+    }
+
+    if (!bulkEditData.lockerPrefix.trim()) {
+      toast.error('Masukkan prefix loker terlebih dahulu');
+      return;
+    }
+
+    const classStudents = students.filter(s => s.className === bulkEditData.className);
+
+    // Assign the same locker number to all students in the class
+    classStudents.forEach((student) => {
+      updateStudent(student.id, {
+        lockerNumber: bulkEditData.lockerPrefix.trim(),
+      });
+    });
+
+    toast.success(`Berhasil mengubah nomor loker untuk ${classStudents.length} siswa di kelas ${bulkEditData.className}`);
+    setIsBulkEditOpen(false);
+    setBulkEditData({ className: '', lockerPrefix: '' });
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -121,45 +155,97 @@ export default function StudentsPage() {
             <p className="text-muted-foreground mt-1">Kelola data siswa dan loker laptop</p>
           </div>
           {isAdmin && (
-            <Dialog open={isAddOpen} onOpenChange={(open) => open ? setIsAddOpen(true) : handleDialogClose()}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Tambah Siswa
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editStudent ? 'Edit Siswa' : 'Tambah Siswa Baru'}</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nama Siswa</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Masukkan nama siswa"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+            <div className="flex gap-2">
+              <Dialog open={isAddOpen} onOpenChange={(open) => open ? setIsAddOpen(true) : handleDialogClose()}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Tambah Siswa
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{editStudent ? 'Edit Siswa' : 'Tambah Siswa Baru'}</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                     <div className="space-y-2">
-                      <Label htmlFor="studentNumber">Nomor Urut</Label>
+                      <Label htmlFor="name">Nama Siswa</Label>
                       <Input
-                        id="studentNumber"
-                        type="number"
-                        value={formData.studentNumber}
-                        onChange={(e) => setFormData({ ...formData, studentNumber: e.target.value })}
-                        placeholder="1"
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="Masukkan nama siswa"
                         required
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="studentNumber">Nomor Urut</Label>
+                        <Input
+                          id="studentNumber"
+                          type="number"
+                          value={formData.studentNumber}
+                          onChange={(e) => setFormData({ ...formData, studentNumber: e.target.value })}
+                          placeholder="1"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="className">Kelas</Label>
+                        <Select
+                          value={formData.className}
+                          onValueChange={(value) => setFormData({ ...formData, className: value as ClassName })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih kelas" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CLASS_LIST.map((cls) => (
+                              <SelectItem key={cls} value={cls}>{cls}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                     <div className="space-y-2">
-                      <Label htmlFor="className">Kelas</Label>
+                      <Label htmlFor="lockerNumber">Nomor Loker</Label>
+                      <Input
+                        id="lockerNumber"
+                        value={formData.lockerNumber}
+                        onChange={(e) => setFormData({ ...formData, lockerNumber: e.target.value })}
+                        placeholder="L1-01"
+                        required
+                      />
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <Button type="button" variant="outline" onClick={handleDialogClose} className="flex-1">
+                        Batal
+                      </Button>
+                      <Button type="submit" className="flex-1">
+                        {editStudent ? 'Simpan' : 'Tambah'}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isBulkEditOpen} onOpenChange={setIsBulkEditOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Users className="h-4 w-4" />
+                    Edit Loker Massal
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit Loker Massal per Kelas</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleBulkEditSubmit} className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label>Kelas</Label>
                       <Select
-                        value={formData.className}
-                        onValueChange={(value) => setFormData({ ...formData, className: value as ClassName })}
+                        value={bulkEditData.className}
+                        onValueChange={(value) => setBulkEditData({ ...bulkEditData, className: value as ClassName })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Pilih kelas" />
@@ -171,28 +257,40 @@ export default function StudentsPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lockerNumber">Nomor Loker</Label>
-                    <Input
-                      id="lockerNumber"
-                      value={formData.lockerNumber}
-                      onChange={(e) => setFormData({ ...formData, lockerNumber: e.target.value })}
-                      placeholder="L1-01"
-                      required
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <Button type="button" variant="outline" onClick={handleDialogClose} className="flex-1">
-                      Batal
-                    </Button>
-                    <Button type="submit" className="flex-1">
-                      {editStudent ? 'Simpan' : 'Tambah'}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="bulkLockerPrefix">Prefix Loker</Label>
+                      <Input
+                        id="bulkLockerPrefix"
+                        value={bulkEditData.lockerPrefix}
+                        onChange={(e) => setBulkEditData({ ...bulkEditData, lockerPrefix: e.target.value })}
+                        placeholder="Contoh: L2"
+                        required
+                      />
+                      {bulkEditData.className && (
+                        <p className="text-sm text-muted-foreground">
+                          Kelas {bulkEditData.className} memiliki {students.filter(s => s.className === bulkEditData.className).length} siswa
+                        </p>
+                      )}
+                      {bulkEditData.className && bulkEditData.lockerPrefix && (
+                        <p className="text-sm text-muted-foreground">
+                          Semua siswa di kelas ini akan mendapat nomor loker: {bulkEditData.lockerPrefix.trim()}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                      <Button type="button" variant="outline" onClick={() => setIsBulkEditOpen(false)} className="flex-1">
+                        Batal
+                      </Button>
+                      <Button type="submit" className="flex-1">
+                        Update Loker
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           )}
         </div>
 

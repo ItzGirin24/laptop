@@ -29,24 +29,33 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Trash2, Clock } from 'lucide-react';
-import { CLASS_LIST, ClassName, Student } from '@/types';
+import { Plus, Search, Trash2, Clock, Edit, CheckCircle } from 'lucide-react';
+import { CLASS_LIST, ClassName, Student, LaptopPermission } from '@/types';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 
 export default function PermissionsPage() {
-  const { students, permissions, addPermission, deletePermission } = useData();
+  const { students, permissions, addPermission, updatePermission, deletePermission, completePermission } = useData();
   const { isAdmin } = useAuth();
   const [search, setSearch] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const [editingPermission, setEditingPermission] = useState<LaptopPermission | null>(null);
 
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     startTime: '20:00',
     endTime: '22:00',
+    reason: '',
+  });
+
+  const [editFormData, setEditFormData] = useState({
+    date: '',
+    startTime: '',
+    endTime: '',
     reason: '',
   });
 
@@ -92,6 +101,34 @@ export default function PermissionsPage() {
       deletePermission(id);
       toast.success('Izin berhasil dihapus');
     }
+  };
+
+  const handleEdit = (permission: LaptopPermission) => {
+    setEditingPermission(permission);
+    setEditFormData({
+      date: format(new Date(permission.date), 'yyyy-MM-dd'),
+      startTime: permission.startTime,
+      endTime: permission.endTime,
+      reason: permission.reason,
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingPermission) return;
+
+    updatePermission(editingPermission.id, {
+      date: new Date(editFormData.date),
+      startTime: editFormData.startTime,
+      endTime: editFormData.endTime,
+      reason: editFormData.reason,
+    });
+
+    toast.success('Izin berhasil diperbarui');
+    setIsEditOpen(false);
+    setEditingPermission(null);
   };
 
   const isPermissionActive = (perm: typeof permissions[0]) => {
@@ -143,8 +180,8 @@ export default function PermissionsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Siswa</Label>
-                    <Select 
-                      value={selectedStudentId} 
+                    <Select
+                      value={selectedStudentId}
                       onValueChange={setSelectedStudentId}
                       disabled={!selectedClass}
                     >
@@ -218,6 +255,69 @@ export default function PermissionsPage() {
               </form>
             </DialogContent>
           </Dialog>
+
+          <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Izin</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEditSubmit} className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-date">Tanggal</Label>
+                  <Input
+                    id="edit-date"
+                    type="date"
+                    value={editFormData.date}
+                    onChange={(e) => setEditFormData({ ...editFormData, date: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-startTime">Waktu Mulai</Label>
+                    <Input
+                      id="edit-startTime"
+                      type="time"
+                      value={editFormData.startTime}
+                      onChange={(e) => setEditFormData({ ...editFormData, startTime: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-endTime">Waktu Selesai</Label>
+                    <Input
+                      id="edit-endTime"
+                      type="time"
+                      value={editFormData.endTime}
+                      onChange={(e) => setEditFormData({ ...editFormData, endTime: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-reason">Keterangan/Keperluan</Label>
+                  <Textarea
+                    id="edit-reason"
+                    value={editFormData.reason}
+                    onChange={(e) => setEditFormData({ ...editFormData, reason: e.target.value })}
+                    placeholder="Contoh: Mengerjakan tugas kelompok"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} className="flex-1">
+                    Batal
+                  </Button>
+                  <Button type="submit" className="flex-1">
+                    Simpan Perubahan
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Search */}
@@ -282,14 +382,35 @@ export default function PermissionsPage() {
                       </TableCell>
                       {isAdmin && (
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(perm.id)}
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-1">
+                            {isActive && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleComplete(perm.id)}
+                                className="h-8 w-8 text-green-600 hover:text-green-700"
+                                title="Selesai - Tandai siswa sudah mengumpulkan"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(perm)}
+                              className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(perm.id)}
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>

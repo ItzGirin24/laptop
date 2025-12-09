@@ -2,9 +2,34 @@ const express = require('express');
 const mariadb = require('mariadb');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const admin = require('firebase-admin');
+const axios = require('axios');
+const cron = require('node-cron');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Initialize Firebase Admin
+const serviceAccount = {
+  type: "service_account",
+  project_id: "sostek2025",
+  private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+  private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  client_email: process.env.FIREBASE_CLIENT_EMAIL,
+  client_id: process.env.FIREBASE_CLIENT_ID,
+  auth_uri: "https://accounts.google.com/o/oauth2/auth",
+  token_uri: "https://oauth2.googleapis.com/token",
+  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+  client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL
+};
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: "https://sostek2025-default-rtdb.firebaseio.com"
+});
+
+const firestore = admin.firestore();
 
 // Middleware
 app.use(cors());
@@ -391,6 +416,175 @@ app.post('/api/students/bulk-import', async (req, res) => {
   }
 });
 
+// Function to fetch ngrok URL from GitHub
+async function fetchNgrokUrl() {
+  try {
+    const response = await axios.get('https://raw.githubusercontent.com/ItzGirin24/abbskp/main/laptop.txt');
+    const ngrokUrl = response.data.trim();
+    console.log('Fetched ngrok URL:', ngrokUrl);
+    return ngrokUrl;
+  } catch (error) {
+    console.error('Error fetching ngrok URL:', error.message);
+    return null;
+  }
+}
+
+// Function to sync data from Firestore to local MariaDB
+async function syncFromFirestore() {
+  try {
+    console.log('Starting sync from Firestore...');
+
+    // Get ngrok URL
+    const ngrokUrl = await fetchNgrokUrl();
+    if (!ngrokUrl) {
+      console.log('No ngrok URL available, skipping sync');
+      return;
+    }
+
+    // Fetch data from remote server via ngrok
+    const [studentsRes, permissionsRes, confiscationsRes, historyRes] = await Promise.all([
+      axios.get(`${ngrokUrl}/api/students`),
+      axios.get(`${ngrokUrl}/api/permissions`),
+      axios.get(`${ngrokUrl}/api/confiscations`),
+      axios.get(`${ngrokUrl}/api/collection-history`)
+    ]);
+
+    const remoteStudents = studentsRes.data;
+    const remotePermissions = permissionsRes.data;
+    const remoteConfiscations = confiscationsRes.data;
+    const remoteHistory = historyRes.data;
+
+    let conn;
+    try {
+      conn = await pool.getConnection();
+
+      // Sync students
+      for (const student of remoteStudents) {
+        await conn.query(
+          `INSERT INTO students (id, name, student_number, class_name, locker_number, collection_status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+           name = VALUES(name),
+           student_number = VALUES(student_number),
+           class_name = VALUES(class_name),
+           locker_number = VALUES(locker_number),
+           collection_status = VALUES(collection_status),
+           updated_at = VALUES(updated_at)`,
+          [
+            student.id,
+            student.name,
+            student.studentNumber,
+            student.className,
+            student.lockerNumber,
+            student.collectionStatus,
+            new Date(student.createdAt),
+            new Date(student.updatedAt)
+          ]
+        );
+      }
+
+      // Sync permissions
+      for (const permission of remotePermissions) {
+        await conn.query(
+          `INSERT INTO permissions (id, student_id, student_name, class_name, date, start_time, end_time, reason, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+           student_name = VALUES(student_name),
+           class_name = VALUES(class_name),
+           date = VALUES(date),
+           start_time = VALUES(start_time),
+           end_time = VALUES(end_time),
+           reason = VALUES(reason)`,
+          [
+            permission.id,
+            permission.studentId,
+            permission.studentName,
+            permission.className,
+            new Date(permission.date),
+            permission.startTime,
+            permission.endTime,
+            permission.reason,
+            new Date(permission.createdAt)
+          ]
+        );
+      }
+
+      // Sync confiscations
+      for (const confiscation of remoteConfiscations) {
+        await conn.query(
+          `INSERT INTO confiscations (id, student_id, student_name, class_name, locker_number, reason, start_date, end_date, duration, status, returned_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+           student_name = VALUES(student_name),
+           class_name = VALUES(class_name),
+           locker_number = VALUES(locker_number),
+           reason = VALUES(reason),
+           start_date = VALUES(start_date),
+           end_date = VALUES(end_date),
+           duration = VALUES(duration),
+           status = VALUES(status),
+           returned_at = VALUES(returned_at)`,
+          [
+            confiscation.id,
+            confiscation.studentId,
+            confiscation.studentName,
+            confiscation.className,
+            confiscation.lockerNumber,
+            confiscation.reason,
+            new Date(confiscation.startDate),
+            new Date(confiscation.endDate),
+            confiscation.duration,
+            confiscation.status,
+            confiscation.returnedAt ? new Date(confiscation.returnedAt) : null,
+            new Date(confiscation.createdAt)
+          ]
+        );
+      }
+
+      // Sync collection history
+      for (const history of remoteHistory) {
+        await conn.query(
+          `INSERT INTO collection_history (id, student_id, status, date, created_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+           status = VALUES(status),
+           date = VALUES(date)`,
+          [
+            history.id,
+            history.studentId,
+            history.status,
+            new Date(history.date),
+            new Date(history.createdAt)
+          ]
+        );
+      }
+
+      console.log('Sync completed successfully');
+    } finally {
+      if (conn) conn.end();
+    }
+  } catch (error) {
+    console.error('Error syncing from Firestore:', error.message);
+  }
+}
+
+// Schedule sync every 5 minutes
+cron.schedule('*/5 * * * *', () => {
+  console.log('Running scheduled sync...');
+  syncFromFirestore();
+});
+
+// Manual sync endpoint
+app.post('/api/sync', async (req, res) => {
+  try {
+    await syncFromFirestore();
+    res.json({ message: 'Sync completed successfully' });
+  } catch (error) {
+    console.error('Manual sync error:', error);
+    res.status(500).json({ message: 'Sync failed', error: error.message });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
@@ -398,4 +592,8 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  // Initial sync on startup
+  setTimeout(() => {
+    syncFromFirestore();
+  }, 5000); // Wait 5 seconds after startup
 });

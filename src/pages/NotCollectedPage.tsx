@@ -28,6 +28,10 @@ export default function NotCollectedPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const notCollectedStudents = getNotCollectedStudents();
+  const { students } = useData();
+
+  // Get all students with active permissions (regardless of collection status)
+  const allStudentsWithPermission = students.filter(s => hasActivePermission(s.id));
 
   const filteredStudents = notCollectedStudents
     .filter((student) => {
@@ -40,7 +44,16 @@ export default function NotCollectedPage() {
 
   // Separate students with and without active permissions
   const studentsWithoutPermission = filteredStudents.filter(s => !hasActivePermission(s.id));
-  const studentsWithPermission = filteredStudents.filter(s => hasActivePermission(s.id));
+
+  // Filter students with permission based on search and class filter
+  const studentsWithPermission = allStudentsWithPermission
+    .filter((student) => {
+      const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.lockerNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesClass = classFilter === 'all' || student.className === classFilter;
+      return matchesSearch && matchesClass;
+    })
+    .sort((a, b) => a.studentNumber - b.studentNumber);
 
   const handleConfiscate = async () => {
     if (!selectedStudent) return;

@@ -39,7 +39,19 @@ Page() {
     const matchesClass = filterClass === 'all' || student.className === filterClass;
     const matchesStatus = filterStatus === 'all' || student.collectionStatus === filterStatus;
     return matchesSearch && matchesClass && matchesStatus;
-  }).sort((a, b) => a.studentNumber - b.studentNumber);
+  }).sort((a, b) => {
+    // Sort by class order first
+    const classOrder = ['XA', 'XB', 'XIA', 'XIB', 'XIC', 'XIIA', 'XIIB', 'XIIC'];
+    const aClassIndex = classOrder.indexOf(a.className);
+    const bClassIndex = classOrder.indexOf(b.className);
+
+    if (aClassIndex !== bClassIndex) {
+      return aClassIndex - bClassIndex;
+    }
+
+    // Then sort by student number within the same class
+    return a.studentNumber - b.studentNumber;
+  });
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {

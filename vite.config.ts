@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => ({
           /^\/siswa/,
           /^\/loker/,
           /^\/belum/,
+          /^\/riwayat/,
           /^\/sita/,
           /^\/izin/,
           /^\/import/,

@@ -138,6 +138,14 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+               <Route
+                path="/riwayat"
+                element={
+                  <ProtectedRoute>
+                    <HistoryPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/riwayat"
                 element={

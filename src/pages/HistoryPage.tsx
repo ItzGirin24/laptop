@@ -15,6 +15,16 @@ import { CollectionHistory } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 
+// Asumsi antarmuka Student didefinisikan di tempat lain (misalnya, di '@/types' atau DataContext).
+// Jika tidak, Anda perlu mendefinisikannya di sini atau mengimpornya.
+// Contoh struktur Student (sesuaikan jika berbeda):
+// interface Student { id: string; name: string; studentNumber: string; className: string; lockerNumber: string; /* ... */ }
+
+// Antarmuka untuk mengelompokkan siswa dengan entri riwayat terkait
+interface StudentWithHistory {
+  student: Student;
+  history: CollectionHistory;
+}
 export default function HistoryPage() {
   const { collectionHistory, students, deleteCollectionHistory, hasActivePermission, getConfiscationByStudent, getNotCollectedCount, getDaysSinceLastCollected } = useData();
   const { isAdmin } = useAuth();
@@ -45,20 +55,44 @@ export default function HistoryPage() {
     return date.startsWith(monthFilter);
   });
 
+  // Fungsi pembantu untuk mendapatkan entri riwayat unik berdasarkan nama siswa
+  const getUniqueStudentsWithHistory = (
+    historyEntries: CollectionHistory[],
+    allStudents: typeof students // Menggunakan typeof students untuk menginferensi tipe Student[]
+  ): StudentWithHistory[] => {
+    const uniqueStudentNames = new Set<string>();
+    const uniqueStudentHistory: StudentWithHistory[] = [];
+
+    for (const entry of historyEntries) {
+      const student = allStudents.find(s => s.id === entry.studentId);
+      if (student && !uniqueStudentNames.has(student.name)) {
+        uniqueStudentNames.add(student.name);
+        uniqueStudentHistory.push({ student, history: entry });
+      }
+    }
+    return uniqueStudentHistory;
+  };
+
   // Get collection data for selected date
   const getDateData = (date: string) => {
     const dateHistory = collectionHistory.filter(h =>
       h.date.toISOString().split('T')[0] === date
     );
 
-    const collected = dateHistory.filter(h => h.status === 'collected');
-    const notCollected = dateHistory.filter(h => h.status === 'not_collected');
+    const collectedHistory = dateHistory.filter(h => h.status === 'collected');
+    const notCollectedHistory = dateHistory.filter(h => h.status === 'not_collected');
+
+    // Deduplikasi berdasarkan nama siswa
+    const uniqueCollectedStudentsWithHistory = getUniqueStudentsWithHistory(collectedHistory, students);
+    const uniqueNotCollectedStudentsWithHistory = getUniqueStudentsWithHistory(notCollectedHistory, students);
 
     return {
-      collected: collected.length,
-      notCollected: notCollected.length,
-      total: students.length, // Use total registered students instead of history entries
-      details: dateHistory
+      collectedCount: uniqueCollectedStudentsWithHistory.length,
+      notCollectedCount: uniqueNotCollectedStudentsWithHistory.length,
+      total: students.length,
+      collectedStudents: uniqueCollectedStudentsWithHistory, // Daftar siswa unik yang sudah mengumpulkan
+      notCollectedStudents: uniqueNotCollectedStudentsWithHistory, // Daftar siswa unik yang belum mengumpulkan
+      rawDetails: dateHistory // Tetap simpan detail mentah jika diperlukan di tempat lain
     };
   };
 
@@ -98,11 +132,11 @@ export default function HistoryPage() {
       return;
     }
 
-    const dateData = getDateData(searchDate);
-    if (dateData.details.length === 0) {
+    const dateData = getDateData(searchDate); // Ini sekarang mengembalikan struktur baru
+    if (dateData.collectedStudents.length === 0 && dateData.notCollectedStudents.length === 0) {
       toast({
         title: "Error",
-        description: "Tidak ada data untuk tanggal tersebut",
+        description: "Tidak ada data pengumpulan untuk tanggal tersebut",
         variant: "destructive",
       });
       return;
@@ -114,9 +148,9 @@ export default function HistoryPage() {
       {
         'Tanggal': new Date(searchDate).toLocaleDateString('id-ID'),
         'Total Siswa': dateData.total.toString(),
-        'Sudah Mengumpul': dateData.collected.toString(),
-        'Belum Mengumpul': dateData.notCollected.toString(),
-        'Tingkat Kepatuhan': dateData.total > 0 ? `${Math.round((dateData.collected / dateData.total) * 100)}%` : '0%',
+        'Sudah Mengumpul': dateData.collectedCount.toString(),
+        'Belum Mengumpul': dateData.notCollectedCount.toString(),
+        'Tingkat Kepatuhan': dateData.total > 0 ? `${Math.round((dateData.collectedCount / dateData.total) * 100)}%` : '0%',
         'Nama Siswa': '',
         'No. Absen': '',
         'Kelas': '',
@@ -163,12 +197,8 @@ export default function HistoryPage() {
       }
     ];
 
-    // Add collected students
-    dateData.details
-      .filter(h => h.status === 'collected')
-      .forEach((history) => {
-        const student = students.find(s => s.id === history.studentId);
-        if (student) {
+    dateData.collectedStudents // Gunakan daftar yang sudah dideduplikasi
+      .forEach(({ student, history }) => { // Destrukturisasi student dan history
           exportData.push({
             'Tanggal': '',
             'Total Siswa': '',
@@ -188,7 +218,6 @@ export default function HistoryPage() {
             'Status Izin': hasActivePermission(student.id) ? 'Sedang Izin' : 'Tidak Ada Izin',
             'Status Sita': getConfiscationByStudent(student.id) ? 'Disita' : 'Belum Disita'
           });
-        }
       });
 
     // Add separator
@@ -228,11 +257,8 @@ export default function HistoryPage() {
     });
 
     // Add not collected students
-    dateData.details
-      .filter(h => h.status === 'not_collected')
-      .forEach((history) => {
-        const student = students.find(s => s.id === history.studentId);
-        if (student) {
+    dateData.notCollectedStudents
+      .forEach(({ student, history }) => {
           exportData.push({
             'Tanggal': '',
             'Total Siswa': '',
@@ -252,7 +278,6 @@ export default function HistoryPage() {
             'Status Izin': hasActivePermission(student.id) ? 'Sedang Izin' : 'Tidak Ada Izin',
             'Status Sita': getConfiscationByStudent(student.id) ? 'Disita' : 'Belum Disita'
           });
-        }
       });
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -435,7 +460,7 @@ export default function HistoryPage() {
                   ) : (
                     filteredDates.map((date) => {
                       const data = getDateData(date);
-                      const complianceRate = data.total > 0 ? Math.round((data.collected / data.total) * 100) : 0;
+                      const complianceRate = data.total > 0 ? Math.round((data.collectedCount / data.total) * 100) : 0;
 
                       // Format date for display
                       const dateObj = new Date(date);
@@ -451,15 +476,15 @@ export default function HistoryPage() {
                           <TableCell className="font-medium">{formattedDate}</TableCell>
                           <TableCell>{data.total.toString()}</TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 text-success">
                               <CheckCircle2 className="h-4 w-4 text-success" />
-                              {data.collected.toString()}
+                              {data.collectedCount.toString()}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 text-destructive">
                               <XCircle className="h-4 w-4 text-destructive" />
-                              {data.notCollected.toString()}
+                              {data.notCollectedCount.toString()}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -528,7 +553,7 @@ export default function HistoryPage() {
                           <CheckCircle2 className="h-6 w-6 text-success" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-success">{selectedDateData.collected.toString()}</p>
+                          <p className="text-2xl font-bold text-success">{selectedDateData.collectedCount.toString()}</p>
                           <p className="text-sm text-muted-foreground">Sudah Ngumpul</p>
                         </div>
                       </div>
@@ -541,7 +566,7 @@ export default function HistoryPage() {
                           <XCircle className="h-6 w-6 text-destructive" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-destructive">{selectedDateData.notCollected.toString()}</p>
+                          <p className="text-2xl font-bold text-destructive">{selectedDateData.notCollectedCount.toString()}</p>
                           <p className="text-sm text-muted-foreground">Belum Ngumpul</p>
                         </div>
                       </div>
@@ -553,8 +578,7 @@ export default function HistoryPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-success">
-                      <CheckCircle2 className="h-5 w-5" />
-                      Sudah Mengumpulkan ({selectedDateData.collected.toString()})
+                      <CheckCircle2 className="h-5 w-5" /> Sudah Mengumpulkan ({selectedDateData.collectedCount.toString()})
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -570,11 +594,8 @@ export default function HistoryPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {selectedDateData.details
-                            .filter(h => h.status === 'collected')
-                            .map((history) => {
-                              const student = students.find(s => s.id === history.studentId);
-                              return student ? (
+                          {selectedDateData.collectedStudents
+                            .map(({ student, history }) => (
                                 <TableRow key={history.id}>
                                   <TableCell className="font-medium">{student.name}</TableCell>
                                   <TableCell>{student.studentNumber}</TableCell>
@@ -618,8 +639,8 @@ export default function HistoryPage() {
                                     </TableCell>
                                   )}
                                 </TableRow>
-                              ) : null;
-                            })}
+                              ))
+                            }
                         </TableBody>
                       </Table>
                     </div>
@@ -630,8 +651,7 @@ export default function HistoryPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-destructive">
-                      <AlertTriangle className="h-5 w-5" />
-                      Belum Mengumpulkan ({selectedDateData.notCollected.toString()})
+                      <AlertTriangle className="h-5 w-5" /> Belum Mengumpulkan ({selectedDateData.notCollectedCount.toString()})
                     </CardTitle>
                     <CardDescription>
                       Siswa yang belum mengumpulkan laptop pada tanggal ini
@@ -654,11 +674,9 @@ export default function HistoryPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {selectedDateData.details
-                            .filter(h => h.status === 'not_collected')
-                            .map((history) => {
-                              const student = students.find(s => s.id === history.studentId);
-                              if (!student) return null;
+                          {selectedDateData.notCollectedStudents
+                            .map(({ student, history }) => {
+                              // student dan history dijamin ada di sini karena logika getUniqueStudentsWithHistory
 
                               const confiscation = getConfiscationByStudent(student.id);
                               const hasPermission = hasActivePermission(student.id);

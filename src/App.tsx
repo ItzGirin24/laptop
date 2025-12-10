@@ -17,6 +17,7 @@ import NotCollectedPage from "./pages/NotCollectedPage";
 import ConfiscationPage from "./pages/ConfiscationPage";
 import HistoryPage from "./pages/HistoryPage";
 import NotFound from "./pages/NotFound";
+import MigrationPage from "./pages/MigrationPage";
 
 const queryClient = new QueryClient();
 
@@ -90,6 +91,14 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+               <Route
+                path="/beranda"
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/siswa"
                 element={
@@ -143,6 +152,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <HistoryPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/migrasi"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <MigrationPage />
                   </ProtectedRoute>
                 }
               />

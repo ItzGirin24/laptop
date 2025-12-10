@@ -4,14 +4,16 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { ClassStatsTable } from '@/components/dashboard/ClassStatsTable';
 import { NotCollectedList } from '@/components/dashboard/NotCollectedList';
-import { Users, Laptop, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Users, Laptop, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { students, getNotCollectedStudents } = useData();
+  const { students, getNotCollectedStudents, hasActivePermission } = useData();
   const { user } = useAuth();
 
   const notCollected = getNotCollectedStudents();
   const collected = students.filter((s) => s.collectionStatus === 'collected');
+  const needsAction = notCollected.filter(s => !hasActivePermission(s.id));
+  const withPermission = notCollected.filter(s => hasActivePermission(s.id));
   const collectionRate = students.length > 0 
     ? Math.round((collected.length / students.length) * 100) 
     : 0;
@@ -47,10 +49,17 @@ export default function DashboardPage() {
           />
           <StatCard
             title="Belum Mengumpul"
-            value={notCollected.length}
+            value={needsAction.length}
             subtitle="Perlu ditindaklanjuti"
             icon={AlertTriangle}
             variant="destructive"
+          />
+          <StatCard
+            title="Sedang Izin"
+            value={withPermission.length}
+            subtitle="Dari yang belum mengumpul"
+            icon={Clock}
+            variant="warning"
           />
           <StatCard
             title="Rate Pengumpulan"

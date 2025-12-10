@@ -4,6 +4,16 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -20,18 +30,33 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Search, CheckCheck, XCircle, Laptop, Download } from 'lucide-react';
-import { CLASS_LIST, ClassName } from '@/types';
+import { Search, CheckCheck, XCircle, Laptop, Download, Clock } from 'lucide-react';
+import { CLASS_LIST, ClassName, Student } from '@/types';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
 
 export default function 
 Page() {
-  const { students, updateCollectionStatus, bulkUpdateStatus, hasActivePermission } = useData();
+  const { students, updateCollectionStatus, bulkUpdateStatus, hasActivePermission, addPermission } = useData();
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
+  const [studentForPermission, setStudentForPermission] = useState<Student | null>(null);
+
+  const [permissionFormData, setPermissionFormData] = useState({
+    date: format(new Date(), 'yyyy-MM-dd'),
+    startTime: '20:00',
+    endTime: '22:00',
+    reason: '',
+  });
+
+  const handleOpenPermissionDialog = (student: Student) => {
+    setStudentForPermission(student);
+    setIsPermissionDialogOpen(true);
+  };
 
   const filteredStudents = students.filter((student) => {
     const matchesSearch = student.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -93,6 +118,40 @@ Page() {
     const newStatus = currentStatus === 'collected' ? 'not_collected' : 'collected';
     updateCollectionStatus(id, newStatus);
     toast.success(`Status diperbarui`);
+  };
+
+  const handlePermissionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studentForPermission) return;
+
+    try {
+      await addPermission({
+        studentId: studentForPermission.id,
+        studentName: studentForPermission.name,
+        className: studentForPermission.className,
+        date: new Date(permissionFormData.date),
+        startTime: permissionFormData.startTime,
+        endTime: permissionFormData.endTime,
+        reason: permissionFormData.reason,
+      });
+
+      toast.success(`Izin untuk ${studentForPermission.name} berhasil ditambahkan.`);
+      setIsPermissionDialogOpen(false);
+      setStudentForPermission(null);
+      setPermissionFormData({
+        date: format(new Date(), 'yyyy-MM-dd'),
+        startTime: '20:00',
+        endTime: '22:00',
+        reason: '',
+      });
+    } catch (error) {
+      toast.error("Gagal menambahkan izin. Silakan coba lagi.");
+    }
+  };
+
+  const handlePermissionDialogClose = () => {
+    setIsPermissionDialogOpen(false);
+    setStudentForPermission(null);
   };
 
   const isAllSelected = filteredStudents.length > 0 &&
@@ -201,6 +260,7 @@ Page() {
                 <TableHead className="w-28">Loker</TableHead>
                 <TableHead className="w-36">Status</TableHead>
                 <TableHead className="w-24 text-center">Aksi</TableHead>
+                <TableHead className="w-24 text-center">Izin</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -252,9 +312,22 @@ Page() {
                           onClick={() => handleToggleStatus(student.id, student.collectionStatus)}
                           className={`gap-1 ${student.collectionStatus === 'collected' ? 'text-destructive hover:text-destructive' : 'text-success hover:text-success'}`}
                         >
-                          <Laptop className="h-4 w-4" />
+                          {student.collectionStatus === 'collected' ? <XCircle className="h-4 w-4" /> : <CheckCheck className="h-4 w-4" />}
                           {student.collectionStatus === 'collected' ? 'Batal' : 'Kumpul'}
                         </Button>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {student.collectionStatus === 'not_collected' && !hasPermission && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenPermissionDialog(student)}
+                            className="gap-1 text-warning hover:text-warning border-warning/50 hover:bg-warning/10"
+                          >
+                            <Clock className="h-4 w-4" />
+                            Izin
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -263,6 +336,70 @@ Page() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Permission Dialog */}
+        <Dialog open={isPermissionDialogOpen} onOpenChange={handlePermissionDialogClose}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Tambah Izin untuk {studentForPermission?.name}</DialogTitle>
+              <DialogDescription>
+                Siswa: {studentForPermission?.name} ({studentForPermission?.className})
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handlePermissionSubmit} className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="date">Tanggal</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={permissionFormData.date}
+                  onChange={(e) => setPermissionFormData({ ...permissionFormData, date: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startTime">Waktu Mulai</Label>
+                  <Input
+                    id="startTime"
+                    type="time"
+                    value={permissionFormData.startTime}
+                    onChange={(e) => setPermissionFormData({ ...permissionFormData, startTime: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endTime">Waktu Selesai</Label>
+                  <Input
+                    id="endTime"
+                    type="time"
+                    value={permissionFormData.endTime}
+                    onChange={(e) => setPermissionFormData({ ...permissionFormData, endTime: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reason">Keterangan/Keperluan</Label>
+                <Textarea
+                  id="reason"
+                  value={permissionFormData.reason}
+                  onChange={(e) => setPermissionFormData({ ...permissionFormData, reason: e.target.value })}
+                  placeholder="Contoh: Mengerjakan tugas kelompok"
+                  required
+                />
+              </div>
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="outline" onClick={handlePermissionDialogClose}>
+                  Batal
+                </Button>
+                <Button type="submit">
+                  Simpan Izin
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

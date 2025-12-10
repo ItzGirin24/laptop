@@ -17,7 +17,8 @@ import axios from 'axios';
 import { Student, LaptopPermission, Confiscation, ClassName, CollectionStatus, ClassStats, CollectionHistory, CLASS_LIST } from '@/types';
 
 // Configuration constants
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+const USE_FIREBASE_API = import.meta.env.VITE_USE_FIREBASE_API === 'true';
 const USE_MARIADB = import.meta.env.VITE_USE_MARIADB === 'true';
 
 interface DataContextType {
@@ -66,9 +67,10 @@ const timestampToDate = (timestamp: any): Date => {
   return new Date(timestamp);
 };
 
-// API helper functions for MariaDB
+// API helper functions for MariaDB/Firebase API
 const apiCall = async (method: 'GET' | 'POST' | 'PUT' | 'DELETE', endpoint: string, data?: any) => {
   try {
+    const API_BASE_URL = await getCachedApiBaseUrl();
     const config = {
       method,
       url: `${API_BASE_URL}${endpoint}`,
@@ -108,8 +110,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
           setPermissions(permissionsRes);
           setConfiscations(confiscationsRes);
           setCollectionHistory(historyRes);
+        } else if (USE_FIREBASE_API) {
+          // Load data from Firebase API (ngrok/local server)
+          const [studentsRes, permissionsRes, confiscationsRes, historyRes] = await Promise.all([
+            apiCall('GET', '/students'),
+            apiCall('GET', '/permissions'),
+            apiCall('GET', '/confiscations'),
+            apiCall('GET', '/collection-history')
+          ]);
+
+          setStudents(studentsRes);
+          setPermissions(permissionsRes);
+          setConfiscations(confiscationsRes);
+          setCollectionHistory(historyRes);
         } else {
-          // Subscribe to Firestore collections
+          // Subscribe to Firestore collections directly
           const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
             const studentsData = snapshot.docs.map((doc) => ({
               id: doc.id,
@@ -161,9 +176,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('Error loading data:', error);
-        // Fallback to Firestore if MariaDB fails
-        if (USE_MARIADB) {
-          console.warn('Falling back to Firestore due to MariaDB error');
+        // Fallback to Firestore if API fails
+        if (USE_MARIADB || USE_FIREBASE_API) {
+          console.warn('Falling back to direct Firestore due to API error');
           // Could implement fallback logic here
         }
       } finally {
@@ -189,15 +204,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const updateStudent = async (id: string, updates: Partial<Student>) => {
-    const studentRef = doc(db, 'students', id);
-    await updateDoc(studentRef, {
-      ...updates,
-      updatedAt: Timestamp.now(),
-    });
+    if (USE_MARIADB || USE_FIREBASE_API) {
+      await apiCall('PUT', `/students/${id}`, updates);
+      // Update local state
+      setStudents(prev => prev.map(student =>
+        student.id === id ? { ...student, ...updates } : student
+      ));
+    } else {
+      const studentRef = doc(db, 'students', id);
+      await updateDoc(studentRef, {
+        ...updates,
+        updatedAt: Timestamp.now(),
+      });
+    }
   };
 
   const deleteStudent = async (id: string) => {
-    await deleteDoc(doc(db, 'students', id));
+    if (USE_MARIADB || USE_FIREBASE_API) {
+      await apiCall('DELETE', `/students/${id}`);
+      // Update local state
+      setStudents(prev => prev.filter(student => student.id !== id));
+    } else {
+      await deleteDoc(doc(db, 'students', id));
+    }
   };
 
   const addCollectionHistory = async (history: Omit<CollectionHistory, 'id' | 'createdAt'>) => {
@@ -275,24 +304,44 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const addPermission = async (permission: Omit<LaptopPermission, 'id' | 'createdAt'>) => {
-    await addDoc(collection(db, 'permissions'), {
-      ...permission,
-      date: Timestamp.fromDate(permission.date instanceof Date ? permission.date : new Date(permission.date)),
-      createdAt: Timestamp.now(),
-    });
+    if (USE_MARIADB || USE_FIREBASE_API) {
+      const result = await apiCall('POST', '/permissions', permission);
+      // Update local state
+      setPermissions(prev => [...prev, result]);
+    } else {
+      await addDoc(collection(db, 'permissions'), {
+        ...permission,
+        date: Timestamp.fromDate(permission.date instanceof Date ? permission.date : new Date(permission.date)),
+        createdAt: Timestamp.now(),
+      });
+    }
   };
 
   const updatePermission = async (id: string, updates: Partial<LaptopPermission>) => {
-    const permissionRef = doc(db, 'permissions', id);
-    const updateData: any = { ...updates };
-    if (updates.date) {
-      updateData.date = Timestamp.fromDate(updates.date instanceof Date ? updates.date : new Date(updates.date));
+    if (USE_MARIADB || USE_FIREBASE_API) {
+      await apiCall('PUT', `/permissions/${id}`, updates);
+      // Update local state
+      setPermissions(prev => prev.map(permission =>
+        permission.id === id ? { ...permission, ...updates } : permission
+      ));
+    } else {
+      const permissionRef = doc(db, 'permissions', id);
+      const updateData: any = { ...updates };
+      if (updates.date) {
+        updateData.date = Timestamp.fromDate(updates.date instanceof Date ? updates.date : new Date(updates.date));
+      }
+      await updateDoc(permissionRef, updateData);
     }
-    await updateDoc(permissionRef, updateData);
   };
 
   const deletePermission = async (id: string) => {
-    await deleteDoc(doc(db, 'permissions', id));
+    if (USE_MARIADB || USE_FIREBASE_API) {
+      await apiCall('DELETE', `/permissions/${id}`);
+      // Update local state
+      setPermissions(prev => prev.filter(permission => permission.id !== id));
+    } else {
+      await deleteDoc(doc(db, 'permissions', id));
+    }
   };
 
   const completePermission = async (permissionId: string) => {

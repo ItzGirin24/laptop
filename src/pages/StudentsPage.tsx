@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Edit, Trash2, Users } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Users, AlertTriangle } from 'lucide-react';
 import { CLASS_LIST, ClassName, Student } from '@/types';
 import { toast } from 'sonner';
 
@@ -39,6 +39,7 @@ export default function StudentsPage() {
   const [filterClass, setFilterClass] = useState<string>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+  const [isRemoveDuplicatesOpen, setIsRemoveDuplicatesOpen] = useState(false);
   const [editStudent, setEditStudent] = useState<Student | null>(null);
 
   // Form state
@@ -61,6 +62,22 @@ export default function StudentsPage() {
     const matchesClass = filterClass === 'all' || student.className === filterClass;
     return matchesSearch && matchesClass;
   }).sort((a, b) => a.studentNumber - b.studentNumber);
+
+  // Find duplicate students by name (case-insensitive)
+  const duplicateGroups = students.reduce((groups: Student[][], student) => {
+    const normalizedName = student.name.toLowerCase().trim();
+    const existingGroup = groups.find(group =>
+      group[0].name.toLowerCase().trim() === normalizedName
+    );
+
+    if (existingGroup) {
+      existingGroup.push(student);
+    } else {
+      groups.push([student]);
+    }
+
+    return groups;
+  }, []).filter(group => group.length > 1);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,6 +162,22 @@ export default function StudentsPage() {
     setBulkEditData({ className: '', lockerPrefix: '' });
   };
 
+  const handleRemoveDuplicates = () => {
+    if (duplicateGroups.length === 0) return;
+
+    let deletedCount = 0;
+    duplicateGroups.forEach(group => {
+      // Keep the first student, delete the rest
+      for (let i = 1; i < group.length; i++) {
+        deleteStudent(group[i].id);
+        deletedCount++;
+      }
+    });
+
+    toast.success(`Berhasil menghapus ${deletedCount} data siswa ganda`);
+    setIsRemoveDuplicatesOpen(false);
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -156,6 +189,65 @@ export default function StudentsPage() {
           </div>
           {isAdmin && (
             <div className="flex gap-2">
+              <Dialog open={isRemoveDuplicatesOpen} onOpenChange={setIsRemoveDuplicatesOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Hapus Nama Ganda
+                    {duplicateGroups.length > 0 && (
+                      <Badge variant="destructive" className="ml-1">
+                        {duplicateGroups.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Hapus Data Siswa Ganda</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-4">
+                    {duplicateGroups.length === 0 ? (
+                      <p className="text-muted-foreground">Tidak ada data siswa ganda ditemukan.</p>
+                    ) : (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          Ditemukan {duplicateGroups.length} grup nama yang sama. Sistem akan menyimpan data siswa pertama dan menghapus siswa lainnya dalam setiap grup.
+                        </p>
+                        <div className="max-h-60 overflow-y-auto space-y-3">
+                          {duplicateGroups.map((group, index) => (
+                            <div key={index} className="border rounded-lg p-3 bg-muted/50">
+                              <p className="font-medium text-sm mb-2">Nama: {group[0].name}</p>
+                              <div className="space-y-1">
+                                {group.map((student, studentIndex) => (
+                                  <div key={student.id} className="flex justify-between items-center text-xs">
+                                    <span>
+                                      {student.className} - No. {student.studentNumber} - Loker: {student.lockerNumber}
+                                    </span>
+                                    {studentIndex === 0 ? (
+                                      <Badge variant="outline" className="text-xs">Akan disimpan</Badge>
+                                    ) : (
+                                      <Badge variant="destructive" className="text-xs">Akan dihapus</Badge>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-3 pt-4">
+                          <Button type="button" variant="outline" onClick={() => setIsRemoveDuplicatesOpen(false)} className="flex-1">
+                            Batal
+                          </Button>
+                          <Button type="button" onClick={handleRemoveDuplicates} className="flex-1">
+                            Hapus {duplicateGroups.reduce((sum, group) => sum + group.length - 1, 0)} Data Ganda
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+
               <Dialog open={isAddOpen} onOpenChange={(open) => open ? setIsAddOpen(true) : handleDialogClose()}>
                 <DialogTrigger asChild>
                   <Button className="gap-2">

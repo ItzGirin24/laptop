@@ -1,11 +1,7 @@
-# Midnight Reset Implementation
+# TODO: Remove Lovable Elements
 
-## Tasks
-- [x] Add midnight reset function to server.js
-- [x] Add cron job for midnight reset (0 0 * * *)
-- [ ] Test the implementation
-
-## Details
-- Reset all students' collection status to 'not_collected'
-- Delete all permissions
-- Runs automatically at midnight every day
+- [x] Remove "lovable-tagger" from package.json devDependencies
+- [x] Update vite.config.ts to remove lovable-tagger import and plugin usage
+- [x] Replace README.md content with generic project README
+- [x] Run npm install to update lock files and remove node_modules entries
+- [ ] Verify no "lovable" references remain in codebase

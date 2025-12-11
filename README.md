@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Sistem Pendataan Laptop ABBSKP
 
 Aplikasi Manajemen Pengumpulan Laptop Siswa untuk ABBSKP (Akademi Bina Bangsa School of Culinary and Pastry).
@@ -74,3 +75,6 @@ Aplikasi ini dapat di-deploy sebagai PWA dan dapat diakses offline setelah insta
 ## Lisensi
 
 Proyek ini menggunakan lisensi proprietary ABBSKP.
+=======
+
+>>>>>>> 3e88e5bcbb8a4b3d39612254cca62eb2abb09d72

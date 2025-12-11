@@ -1,5 +1,11 @@
-- [x] Add CollectionHistory type to types/index.ts
-- [x] Update DataContext to manage collection history
-- [x] Modify NotCollectedPage to display history and sort by absen
-- [x] Update firestore rules if needed (not needed - current rules allow all access)
-- [x] Test the changes (implementation complete)
+# Midnight Reset Implementation
+
+## Tasks
+- [x] Add midnight reset function to server.js
+- [x] Add cron job for midnight reset (0 0 * * *)
+- [ ] Test the implementation
+
+## Details
+- Reset all students' collection status to 'not_collected'
+- Delete all permissions
+- Runs automatically at midnight every day

@@ -3,6 +3,7 @@ import mariadb from 'mariadb';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
 
 dotenv.config();
 
@@ -394,6 +395,35 @@ app.post('/api/students/bulk-import', async (req, res) => {
   }
 });
 
+// Function to reset all students and permissions at midnight
+async function midnightReset() {
+  console.log('Running midnight reset...');
+  let conn;
+  try {
+    conn = await pool.getConnection();
+
+    // Reset all students' collection status to 'not_collected'
+    await conn.query('UPDATE students SET collection_status = ?, updated_at = NOW()', ['not_collected']);
+    console.log('All students reset to not_collected');
+
+    // Delete all permissions
+    await conn.query('DELETE FROM permissions');
+    console.log('All permissions deleted');
+
+    console.log('Midnight reset completed successfully');
+  } catch (error) {
+    console.error('Error during midnight reset:', error);
+  } finally {
+    if (conn) conn.end();
+  }
+}
+
+// Schedule midnight reset every day at 00:00
+cron.schedule('0 0 * * *', () => {
+  console.log('Running midnight reset...');
+  midnightReset();
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({
@@ -407,4 +437,5 @@ app.listen(PORT, () => {
   console.log(`🚀 MariaDB Local Server running on port ${PORT}`);
   console.log('📍 This server connects to local MariaDB database');
   console.log('🔄 No automatic sync - manual sync only');
+  console.log('⏰ Midnight reset scheduled for 00:00 daily');
 });

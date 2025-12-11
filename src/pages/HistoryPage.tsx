@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Calendar, History, CheckCircle2, XCircle, Trash2, AlertTriangle, Clock, Download, Search } from 'lucide-react';
-import { CollectionHistory } from '@/types';
+import { CollectionHistory, CLASS_LIST, ClassName, Student } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 
@@ -30,11 +30,13 @@ export default function HistoryPage() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [monthFilter, setMonthFilter] = useState<string>('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [historyToDelete, setHistoryToDelete] = useState<CollectionHistory | null>(null);
   const [searchDate, setSearchDate] = useState<string>('');
   const [exportMonthFilter, setExportMonthFilter] = useState<string>('all');
+  const [detailClassFilter, setDetailClassFilter] = useState<string>('all');
+  const [detailStatusFilter, setDetailStatusFilter] = useState<string>('all');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Reset searchDate when exportMonthFilter changes
   const handleExportMonthChange = (value: string) => {
@@ -49,11 +51,8 @@ export default function HistoryPage() {
     )
   ).sort().reverse(); // Most recent first
 
-  // Filter dates by month if selected
-  const filteredDates = uniqueDates.filter(date => {
-    if (monthFilter === 'all') return true;
-    return date.startsWith(monthFilter);
-  });
+  // No global filters, show all dates
+  const filteredDates = uniqueDates;
 
   // Fungsi pembantu untuk mendapatkan entri riwayat unik berdasarkan nama siswa
   const getUniqueStudentsWithHistory = (
@@ -104,6 +103,43 @@ export default function HistoryPage() {
   ).sort().reverse();
 
   const selectedDateData = selectedDate ? getDateData(selectedDate) : null;
+
+  // Filtered and sorted students for detail dialog
+  const getFilteredAndSortedStudents = (students: StudentWithHistory[], classFilter: string, statusFilter: string, sortOrder: 'asc' | 'desc') => {
+    let filtered = students;
+
+    // Apply class filter
+    if (classFilter !== 'all') {
+      filtered = filtered.filter(({ student }) => student.className === classFilter);
+    }
+
+    // Apply status filter (for detail dialog, this might be redundant but kept for consistency)
+    if (statusFilter !== 'all') {
+      // Since collected/not collected is already separated, this filter might not apply here
+      // But we can keep it for future use
+    }
+
+    // Sort alphabetically
+    filtered = filtered.sort((a, b) => {
+      const nameA = a.student.name.toLowerCase();
+      const nameB = b.student.name.toLowerCase();
+      if (sortOrder === 'asc') {
+        return nameA.localeCompare(nameB);
+      } else {
+        return nameB.localeCompare(nameA);
+      }
+    });
+
+    return filtered;
+  };
+
+  const filteredCollectedStudents = selectedDateData ? getFilteredAndSortedStudents(selectedDateData.collectedStudents, detailClassFilter, detailStatusFilter, sortOrder) : [];
+  const filteredNotCollectedStudents = selectedDateData ? getFilteredAndSortedStudents(selectedDateData.notCollectedStudents, detailClassFilter, detailStatusFilter, sortOrder) : [];
+
+  // Calculate filtered counts and total
+  const filteredTotal = students.filter(s => detailClassFilter === 'all' || s.className === detailClassFilter).length;
+  const filteredCollectedCount = filteredCollectedStudents.length;
+  const filteredNotCollectedCount = filteredNotCollectedStudents.length;
 
   const handleDeleteHistory = async (history: CollectionHistory) => {
     try {
@@ -322,33 +358,7 @@ export default function HistoryPage() {
           </div>
         </div>
 
-        {/* Month Filter */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <Select value={monthFilter} onValueChange={setMonthFilter}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Semua Bulan" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Bulan</SelectItem>
-                  {availableMonths.map((month) => {
-                    const [year, monthNum] = month.split('-');
-                    const monthNames = [
-                      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-                      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-                    ];
-                    return (
-                      <SelectItem key={month} value={month}>
-                        {monthNames[parseInt(monthNum) - 1]} {year}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+
 
         {/* Export Section */}
         <Card>
@@ -529,6 +539,42 @@ export default function HistoryPage() {
               </DialogDescription>
             </DialogHeader>
 
+            {/* Detail Filters */}
+            <div className="flex flex-col gap-4 sm:flex-row">
+              <Select value={detailClassFilter} onValueChange={setDetailClassFilter}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Semua Kelas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Kelas</SelectItem>
+                  {CLASS_LIST.map((className) => (
+                    <SelectItem key={className} value={className}>
+                      {className}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={detailStatusFilter} onValueChange={setDetailStatusFilter}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Semua Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Status</SelectItem>
+                  <SelectItem value="collected">Sudah Mengumpul</SelectItem>
+                  <SelectItem value="not_collected">Belum Mengumpul</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as 'asc' | 'desc')}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Urutkan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="asc">A-Z</SelectItem>
+                  <SelectItem value="desc">Z-A</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {selectedDateData && (
               <div className="space-y-6">
                 {/* Summary Stats */}
@@ -540,7 +586,7 @@ export default function HistoryPage() {
                           <History className="h-6 w-6 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold">{selectedDateData.total.toString()}</p>
+                          <p className="text-2xl font-bold">{filteredTotal.toString()}</p>
                           <p className="text-sm text-muted-foreground">Total Siswa</p>
                         </div>
                       </div>
@@ -553,7 +599,7 @@ export default function HistoryPage() {
                           <CheckCircle2 className="h-6 w-6 text-success" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-success">{selectedDateData.collectedCount.toString()}</p>
+                          <p className="text-2xl font-bold text-success">{filteredCollectedCount.toString()}</p>
                           <p className="text-sm text-muted-foreground">Sudah Ngumpul</p>
                         </div>
                       </div>
@@ -566,7 +612,7 @@ export default function HistoryPage() {
                           <XCircle className="h-6 w-6 text-destructive" />
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-destructive">{selectedDateData.notCollectedCount.toString()}</p>
+                          <p className="text-2xl font-bold text-destructive">{filteredNotCollectedCount.toString()}</p>
                           <p className="text-sm text-muted-foreground">Belum Ngumpul</p>
                         </div>
                       </div>
@@ -578,7 +624,7 @@ export default function HistoryPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-success">
-                      <CheckCircle2 className="h-5 w-5" /> Sudah Mengumpulkan ({selectedDateData.collectedCount.toString()})
+                      <CheckCircle2 className="h-5 w-5" /> {`Sudah Mengumpulkan (${filteredCollectedCount.toString()})`}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -594,53 +640,60 @@ export default function HistoryPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {selectedDateData.collectedStudents
-                            .map(({ student, history }) => (
-                                <TableRow key={history.id}>
-                                  <TableCell className="font-medium">{student.name}</TableCell>
-                                  <TableCell>{student.studentNumber}</TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline">{student.className}</Badge>
-                                  </TableCell>
-                                  <TableCell>{student.lockerNumber}</TableCell>
-                                  {isAdmin && (
-                                    <TableCell className="text-right">
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            className="gap-1 h-7 px-2 text-xs"
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                            Hapus
-                                          </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>Hapus Riwayat</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              Apakah Anda yakin ingin menghapus riwayat pengumpulan {student.name} pada tanggal {selectedDate ? new Date(selectedDate).toLocaleDateString('id-ID') : ''}?
-                                              <br />
-                                              <strong>Tindakan ini tidak dapat dibatalkan.</strong>
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel>Batal</AlertDialogCancel>
-                                            <AlertDialogAction
-                                              onClick={() => handleDeleteHistory(history)}
-                                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                            >
-                                              Hapus
-                                            </AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
+                          {filteredCollectedStudents.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={isAdmin ? 5 : 4} className="h-24 text-center text-muted-foreground">
+                                Tidak ada siswa yang sudah mengumpulkan dengan filter ini
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredCollectedStudents
+                              .map(({ student, history }) => (
+                                  <TableRow key={history.id}>
+                                    <TableCell className="font-medium">{student.name}</TableCell>
+                                    <TableCell>{student.studentNumber}</TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline">{student.className}</Badge>
                                     </TableCell>
-                                  )}
-                                </TableRow>
-                              ))
-                            }
+                                    <TableCell>{student.lockerNumber}</TableCell>
+                                    {isAdmin && (
+                                      <TableCell className="text-right">
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              className="gap-1 h-7 px-2 text-xs"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                              Hapus
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>Hapus Riwayat</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                Apakah Anda yakin ingin menghapus riwayat pengumpulan {student.name} pada tanggal {selectedDate ? new Date(selectedDate).toLocaleDateString('id-ID') : ''}?
+                                                <br />
+                                                <strong>Tindakan ini tidak dapat dibatalkan.</strong>
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>Batal</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                onClick={() => handleDeleteHistory(history)}
+                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                              >
+                                                Hapus
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </TableCell>
+                                    )}
+                                  </TableRow>
+                                ))
+                          )}
                         </TableBody>
                       </Table>
                     </div>
@@ -651,7 +704,7 @@ export default function HistoryPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-destructive">
-                      <AlertTriangle className="h-5 w-5" /> Belum Mengumpulkan ({selectedDateData.notCollectedCount.toString()})
+                      <AlertTriangle className="h-5 w-5" /> {`Belum Mengumpulkan (${filteredNotCollectedCount.toString()})`}
                     </CardTitle>
                     <CardDescription>
                       Siswa yang belum mengumpulkan laptop pada tanggal ini
@@ -674,83 +727,91 @@ export default function HistoryPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {selectedDateData.notCollectedStudents
-                            .map(({ student, history }) => {
-                              // student dan history dijamin ada di sini karena logika getUniqueStudentsWithHistory
+                          {filteredNotCollectedStudents.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={isAdmin ? 9 : 8} className="h-24 text-center text-muted-foreground">
+                                Tidak ada siswa yang belum mengumpulkan dengan filter ini
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredNotCollectedStudents
+                              .map(({ student, history }) => {
+                                // student dan history dijamin ada di sini karena logika getUniqueStudentsWithHistory
 
-                              const confiscation = getConfiscationByStudent(student.id);
-                              const hasPermission = hasActivePermission(student.id);
+                                const confiscation = getConfiscationByStudent(student.id);
+                                const hasPermission = hasActivePermission(student.id);
 
-                              return (
-                                <TableRow key={history.id}>
-                                  <TableCell className="font-medium">{student.name}</TableCell>
-                                  <TableCell>{student.studentNumber}</TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline">{student.className}</Badge>
-                                  </TableCell>
-                                  <TableCell>{student.lockerNumber}</TableCell>
-                                  <TableCell>{getNotCollectedCount(student.id).toString()}</TableCell>
-                                  <TableCell>
-                                    {(() => {
-                                      const days = getDaysSinceLastCollected(student.id);
-                                      return days === -1 ? 'Belum pernah' : `${days} hari`;
-                                    })()}
-                                  </TableCell>
-                                  <TableCell>
-                                    {hasPermission ? (
-                                      <Badge className="bg-warning text-warning-foreground">
-                                        <Clock className="h-3 w-3 mr-1" />
-                                        Sedang Izin
-                                      </Badge>
-                                    ) : (
-                                      <Badge variant="secondary">Tidak Ada Izin</Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {confiscation ? (
-                                      <Badge className="bg-destructive">Disita</Badge>
-                                    ) : (
-                                      <Badge variant="secondary">Belum Disita</Badge>
-                                    )}
-                                  </TableCell>
-                                  {isAdmin && (
-                                    <TableCell className="text-right">
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            className="gap-1 h-7 px-2 text-xs"
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                            Hapus
-                                          </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>Hapus Riwayat</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              Apakah Anda yakin ingin menghapus riwayat pengumpulan {student.name} pada tanggal {selectedDate ? new Date(selectedDate).toLocaleDateString('id-ID') : ''}?
-                                              <br />
-                                              <strong>Tindakan ini tidak dapat dibatalkan.</strong>
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel>Batal</AlertDialogCancel>
-                                            <AlertDialogAction
-                                              onClick={() => handleDeleteHistory(history)}
-                                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                            >
-                                              Hapus
-                                            </AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
+                                return (
+                                  <TableRow key={history.id}>
+                                    <TableCell className="font-medium">{student.name}</TableCell>
+                                    <TableCell>{student.studentNumber}</TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline">{student.className}</Badge>
                                     </TableCell>
-                                  )}
-                                </TableRow>
-                              );
-                            })}
+                                    <TableCell>{student.lockerNumber}</TableCell>
+                                    <TableCell>{getNotCollectedCount(student.id).toString()}</TableCell>
+                                    <TableCell>
+                                      {(() => {
+                                        const days = getDaysSinceLastCollected(student.id);
+                                        return days === -1 ? 'Belum pernah' : `${days} hari`;
+                                      })()}
+                                    </TableCell>
+                                    <TableCell>
+                                      {hasPermission ? (
+                                        <Badge className="bg-warning text-warning-foreground">
+                                          <Clock className="h-3 w-3 mr-1" />
+                                          Sedang Izin
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="secondary">Tidak Ada Izin</Badge>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      {confiscation ? (
+                                        <Badge className="bg-destructive">Disita</Badge>
+                                      ) : (
+                                        <Badge variant="secondary">Belum Disita</Badge>
+                                      )}
+                                    </TableCell>
+                                    {isAdmin && (
+                                      <TableCell className="text-right">
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              className="gap-1 h-7 px-2 text-xs"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                              Hapus
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>Hapus Riwayat</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                Apakah Anda yakin ingin menghapus riwayat pengumpulan {student.name} pada tanggal {selectedDate ? new Date(selectedDate).toLocaleDateString('id-ID') : ''}?
+                                                <br />
+                                                <strong>Tindakan ini tidak dapat dibatalkan.</strong>
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>Batal</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                onClick={() => handleDeleteHistory(history)}
+                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                              >
+                                                Hapus
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </TableCell>
+                                    )}
+                                  </TableRow>
+                                );
+                              })
+                          )}
                         </TableBody>
                       </Table>
                     </div>

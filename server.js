@@ -6,25 +6,15 @@ import admin from 'firebase-admin';
 import axios from 'axios';
 import cron from 'node-cron';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+
+const serviceAccount = JSON.parse(fs.readFileSync(path.resolve('./../../../../Downloads/sostek2025-firebase-adminsdk-fbsvc-5ef5317372.json'), 'utf8'));
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// Initialize Firebase Admin
-const serviceAccount = {
-  type: "service_account",
-  project_id: "sostek2025",
-  private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-  private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  client_email: process.env.FIREBASE_CLIENT_EMAIL,
-  client_id: process.env.FIREBASE_CLIENT_ID,
-  auth_uri: "https://accounts.google.com/o/oauth2/auth",
-  token_uri: "https://oauth2.googleapis.com/token",
-  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL
-};
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -570,10 +560,39 @@ async function syncFromFirestore() {
   }
 }
 
+// Function to reset all students and permissions at midnight
+async function midnightReset() {
+  console.log('Running midnight reset...');
+  let conn;
+  try {
+    conn = await pool.getConnection();
+
+    // Reset all students' collection status to 'not_collected'
+    await conn.query('UPDATE students SET collection_status = ?, updated_at = NOW()', ['not_collected']);
+    console.log('All students reset to not_collected');
+
+    // Delete all permissions
+    await conn.query('DELETE FROM permissions');
+    console.log('All permissions deleted');
+
+    console.log('Midnight reset completed successfully');
+  } catch (error) {
+    console.error('Error during midnight reset:', error);
+  } finally {
+    if (conn) conn.end();
+  }
+}
+
 // Schedule sync every 5 minutes
 cron.schedule('*/5 * * * *', () => {
   console.log('Running scheduled sync...');
   syncFromFirestore();
+});
+
+// Schedule midnight reset every day at 00:00
+cron.schedule('0 0 * * *', () => {
+  console.log('Running midnight reset...');
+  midnightReset();
 });
 
 // Manual sync endpoint

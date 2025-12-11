@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 
 export default function NotCollectedPage() {
-  const { getNotCollectedStudents, hasActivePermission, addConfiscation, getConfiscationByStudent, getNotCollectedCount, getDaysSinceLastCollected } = useData();
+  const { getNotCollectedStudents, hasActivePermission, addConfiscation, getConfiscationByStudent, getNotCollectedCount, getDaysSinceLastCollected, permissions, deletePermission } = useData();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -97,6 +97,26 @@ export default function NotCollectedPage() {
       toast({
         title: "Error",
         description: "Gagal menyimpan data sita",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleResetPermission = async (studentId: string, studentName: string) => {
+    try {
+      // Find the permission for this student
+      const permission = permissions.find(p => p.studentId === studentId);
+      if (permission) {
+        await deletePermission(permission.id);
+        toast({
+          title: "Berhasil",
+          description: `Izin ${studentName} telah direset`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mereset izin",
         variant: "destructive",
       });
     }
@@ -358,6 +378,7 @@ export default function NotCollectedPage() {
                       <TableHead>Kelas</TableHead>
                       <TableHead>Loker</TableHead>
                       <TableHead>Status</TableHead>
+                      {isAdmin && <TableHead className="text-right">Aksi</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -372,6 +393,18 @@ export default function NotCollectedPage() {
                         <TableCell>
                           <Badge className="bg-warning text-warning-foreground">Sedang Izin</Badge>
                         </TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1"
+                              onClick={() => handleResetPermission(student.id, student.name)}
+                            >
+                              Reset Izin
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
